@@ -1,0 +1,21 @@
+<suite name="JUNESuite" parallel="none">
+	<listeners>
+		<listener class-name="listeners.ExtentTestListener" />
+	</listeners>
+	<parameter name="browser" value="chrome" />
+	<test name="Yash" preserve-order="true">
+		<classes>
+			
+			<class name="test.LoginTest" />
+			<class name="test.bibliographic_data_extraction.USPatentAllScenariosTest" />
+			<class name="test.bibliographic_data_extraction.USTrademarkAllScenariosTest" />
+			<class name="test.bibliographic_data_extraction.USTMImageDownloadTest" />
+			<class name="test.bibliographic_data_extraction.AUPatentAllScenariosTest" />
+			<class name="test.bibliographic_data_extraction.AUTrademarkAllScenariosTest" />
+			<class name="test.bibliographic_data_extraction.EPPatentAllScenariosTest" />
+			<class name="test.bibliographic_data_extraction.GlobalPatentAllScenariosTest" />
+			<class name="test.LogoutTest" />
+			
+		</classes>
+	</test>
+</suite>

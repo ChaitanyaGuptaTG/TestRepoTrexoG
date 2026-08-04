@@ -1,0 +1,19 @@
+# Large binaries
+*.deb
+*.exe
+*.msi
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Build output
+target/
+output/
+test-output/
+screenshots/
+
+# OS files
+.DS_Store
+Thumbs.db

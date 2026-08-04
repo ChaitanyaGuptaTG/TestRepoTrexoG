@@ -1,0 +1,11 @@
+<suite name="JUNESuite" parallel="none">
+	<listeners>
+		<listener class-name="listeners.ExtentTestListener" />
+	</listeners>
+	<parameter name="browser" value="chrome" />
+	<test name="Yash" preserve-order="true">
+		<classes>
+			<class name="test.bibliographic_data_extraction.AUTrademarkAllScenariosTest" />
+		</classes>
+	</test>
+</suite>

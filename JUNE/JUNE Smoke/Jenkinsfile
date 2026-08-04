@@ -1,0 +1,123 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'BROWSER', choices: ['chrome', 'firefox', 'edge', 'safari'], description: 'Browser for automation execution')
+        choice(name: 'TEST_ENV', choices: ['prod', 'qa', 'uat'], description: 'Environment to run tests against')
+        booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Run tests in headless mode')
+        string(name: 'SUITE_XML_FILE', defaultValue: 'testng.xml', description: 'TestNG Suite XML file to execute')
+    }
+
+    triggers {
+        // Runs every weekday (Monday through Friday) at 11:00 AM (Server Time)
+        cron('0 11 * * 1-5')
+    }
+
+    environment {
+        // Find local maven paths if global mvn is not available
+        BUNDLED_MAVEN_WIN = "${WORKSPACE}\\apache-maven-3.9.12-bin\\apache-maven-3.9.12\\bin\\mvn.cmd"
+        BUNDLED_MAVEN_NIX = "${WORKSPACE}/apache-maven-3.9.12-bin/apache-maven-3.9.12/bin/mvn"
+    }
+
+    stages {
+        stage('Environment Check & Setup') {
+            steps {
+                script {
+                    // Fallback to default values if parameters are not yet initialized (first run)
+                    def suiteFile = params.SUITE_XML_FILE ?: 'testng.xml'
+                    def browser = params.BROWSER ?: 'chrome'
+                    def testEnv = params.TEST_ENV ?: 'prod'
+                    def headless = params.HEADLESS != null ? params.HEADLESS : true
+
+                    echo "Starting build on OS: ${isUnix() ? 'Linux/Unix' : 'Windows'}"
+                    echo "Resolved Parameters:"
+                    echo " - Browser: ${browser}"
+                    echo " - Environment: ${testEnv}"
+                    echo " - Headless: ${headless}"
+                    echo " - Suite File: ${suiteFile}"
+                    
+                    // Validate suite file exists
+                    if (!fileExists(suiteFile)) {
+                        error "Specified TestNG Suite XML file not found: ${suiteFile}"
+                    }
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    def suiteFile = params.SUITE_XML_FILE ?: 'testng.xml'
+                    def browser = params.BROWSER ?: 'chrome'
+                    def testEnv = params.TEST_ENV ?: 'prod'
+                    def headless = params.HEADLESS != null ? params.HEADLESS : true
+
+                    // Determine which maven command to run
+                    def mvnCmd = "mvn"
+                    if (isUnix()) {
+                        // Check if global maven exists, else use bundled
+                        def exitCode = sh(script: "command -v mvn >/dev/null 2>&1", returnStatus: true)
+                        if (exitCode != 0) {
+                            echo "Global 'mvn' not found. Using bundled Maven distribution..."
+                            mvnCmd = BUNDLED_MAVEN_NIX
+                            sh "chmod +x '${mvnCmd}'"
+                        }
+                        
+                        // Execute tests on Unix-like agent
+                        sh """
+                            '${mvnCmd}' clean test \\
+                            -DsuiteXmlFile=${suiteFile} \\
+                            -Dbrowser=${browser} \\
+                            -Denv=${testEnv} \\
+                            -Dheadless=${headless}
+                        """
+                    } else {
+                        // Check if global maven exists in Windows path
+                        def exitCode = bat(script: "where mvn >nul 2>nul", returnStatus: true)
+                        if (exitCode != 0) {
+                            echo "Global 'mvn' not found in PATH. Using bundled Maven distribution..."
+                            mvnCmd = BUNDLED_MAVEN_WIN
+                        }
+                        
+                        // Execute tests on Windows agent
+                        bat """
+                            "${mvnCmd}" clean test ^
+                            -DsuiteXmlFile=${suiteFile} ^
+                            -Dbrowser=${browser} ^
+                            -Denv=${testEnv} ^
+                            -Dheadless=${headless}
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo "Archiving test reports and results..."
+                
+                // Archive ExtentReports or general HTML reports from the target and test-output directories
+                try {
+                    archiveArtifacts artifacts: 'test-output/**, target/surefire-reports/**', allowEmptyArchive: true
+                } catch (Exception e) {
+                    echo "Warning: Error archiving files: ${e.message}"
+                }
+                
+                // Publish TestNG Results if the plugin is installed in Jenkins
+                try {
+                    testng()
+                } catch (Throwable t) {
+                    echo "Note: TestNG Results plugin not installed or failed to publish. Archiving raw XML results instead. (Error: ${t.message})"
+                }
+            }
+        }
+        success {
+            echo "Automation Execution Completed Successfully!"
+        }
+        failure {
+            echo "Automation Execution Failed. Please check the logs and reports."
+        }
+    }
+}

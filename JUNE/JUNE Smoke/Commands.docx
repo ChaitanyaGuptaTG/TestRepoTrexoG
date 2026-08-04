@@ -1,0 +1,49 @@
+# Trexo Selenium - Maven Commands (PowerShell)
+
+## Run all tests
+mvn test
+
+## Run one test class
+mvn -Dtest=LoginTest test
+
+## Run one test method
+mvn -Dtest=LoginTest#validLogin test
+
+
+### DEBUGGING ###
+
+1. Check the port availability at TCP via --- netstat -ano | findstr 5005 --- in CMD
+2. If occupied the free the port or Kill the request by running following command in CMD --- taskkill /PID <pid> /F
+3. Now try to run the following command --- mvn --% -Dtest=<<name of test class>> -Dmaven.surefire.debug=true test
+
+
+### Run Test Suite ### ---- mvn test "-Denv=qa" "-Dheadless=true" "-DsuiteXmlFile=testNGQA.xml"
+
+Run ALL tests in chrome without browser head UI (good for local & CI)
+mvn test "-Denv=qa" "-Dheadless=true"
+
+Run ALL tests in chrome with UI (good for debugging & local validation)
+mvn test "-Denv=qa" "-Dheadless=false"
+
+
+## Run with full Maven debug logs
+mvn --% -X -Dtest=LoginTest test
+
+## Clean + test
+mvn clean test
+
+Notes:
+
+Prefer --% in PowerShell when passing -D... flags.
+Keep commands in .md/.txt, not .docx.
+
+Stop other task on port -- Get-NetTCPConnection -LocalPort 5005 | Select-Object OwningProcess,State,LocalAddress,LocalPort
+then --- Stop-Process -Id {OwningProcessNumber} -Force
+
+If multiple entries appear, use:
+Get-NetTCPConnection -LocalPort 5005 | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }
+
+
+
+FROM TESTNG only --- mvn test "-DsuiteXmlFile=testng.xml"
+FROM TESTNGQA only --- mvn test "-DsuiteXmlFile=testNGQA.xml"
