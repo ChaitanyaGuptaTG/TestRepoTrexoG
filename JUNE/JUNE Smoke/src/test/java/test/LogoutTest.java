@@ -23,8 +23,11 @@ public class LogoutTest extends BaseTest {
 		logoutPage.clickProfileIcon();
 		logoutPage.clickLogoutOption();
 
-		org.openqa.selenium.WebElement submitBtn = new org.openqa.selenium.support.ui.WebDriverWait(getDriver(), java.time.Duration.ofSeconds(20))
-				.until(org.openqa.selenium.support.ui.ExpectedConditions.visibilityOfElementLocated(By.xpath("//button[@type='submit']")));
-		Assert.assertTrue(submitBtn.isDisplayed(), "Sign-in submit button should be visible on login page after successful logout.");
+		Assert.assertTrue(loginPage.isSignInButtonVisible(),
+				"Sign-in submit button should be visible on login page after successful logout.");
+
+//		org.openqa.selenium.WebElement submitBtn = new org.openqa.selenium.support.ui.WebDriverWait(getDriver(), java.time.Duration.ofSeconds(20))
+//				.until(org.openqa.selenium.support.ui.ExpectedConditions.visibilityOfElementLocated(By.xpath("//button[@type='submit']")));
+//		Assert.assertTrue(submitBtn.isDisplayed(), "Sign-in submit button should be visible on login page after successful logout.");
 	}
 }
