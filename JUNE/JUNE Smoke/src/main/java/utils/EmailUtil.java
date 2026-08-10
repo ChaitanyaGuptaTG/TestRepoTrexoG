@@ -50,8 +50,9 @@ public class EmailUtil {
 		try {
 			Message message = new MimeMessage(session);
 			message.setFrom(new InternetAddress(username));
-			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse("yash.shrivastava@trexoglobal.com"));
-			message.setRecipients(Message.RecipientType.CC, InternetAddress.parse("yash.shrivastava@trexoglobal.com"));
+//			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse("yash.shrivastava@trexoglobal.com"));
+			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse("chaitanya.gupta@trexoglobal.com"));
+//			message.setRecipients(Message.RecipientType.CC, InternetAddress.parse("yash.shrivastava@trexoglobal.com"));
 			message.setRecipients(Message.RecipientType.BCC, InternetAddress.parse(""));
 
 			String subject;

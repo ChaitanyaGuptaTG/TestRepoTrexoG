@@ -7,18 +7,19 @@ public class LogoutPage extends BasePage {
 	// In this class we are identifying WebElements of LogoutPage
 	// Author : Yash Shrivastava
 
+	private final By profileIcon = By.xpath("//*[name()='svg' and @data-testid='PersonIcon']");
+	private final By logoutOption = By.xpath("//span[normalize-space()='Logout']");
+
 	public LogoutPage(WebDriver driver) {
 		super(driver);
 	}
 
 	public void clickProfileIcon() {
-		By profileIcon = By.xpath("//*[name()='svg' and @data-testid='PersonIcon']");
 		safeClick(profileIcon);
 	}
 
 	public void clickLogoutOption() {
-		By logoutLocator = By.xpath("//div//span[text()='Logout']");
-		waitVisible(logoutLocator);
-		safeClick(logoutLocator);
+		waitVisible(logoutOption);
+		safeClick(logoutOption);
 	}
 }
