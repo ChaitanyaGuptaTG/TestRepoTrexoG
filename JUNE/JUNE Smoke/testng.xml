@@ -5,7 +5,7 @@
 	<parameter name="browser" value="chrome" />
 	<test name="Yash" preserve-order="true">
 		<classes>
-			
+
 			<class name="test.LoginTest" />
 			<class name="test.bibliographic_data_extraction.USPatentAllScenariosTest" />
 			<class name="test.bibliographic_data_extraction.USTrademarkAllScenariosTest" />
