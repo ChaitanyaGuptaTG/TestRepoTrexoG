@@ -1,9 +1,12 @@
 package pages;
 
 import java.time.Duration;
+import java.util.List;
+
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.testng.Assert;
 
 public abstract class BasePage {
 	// this class is created to resuse Waits
@@ -65,4 +68,38 @@ public abstract class BasePage {
 	protected void scrollIntoView(WebElement element) {
 		((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", element);
 	}
+
+	// ── Helpers ──
+
+	/**
+	 * Waits for element to exist in DOM (no visibility needed),
+	 * then scrolls it into view within its scrollable container.
+	 */
+	public void scrollToElement(By locator) {
+		WebElement element = wait.until(
+				ExpectedConditions.presenceOfElementLocated(locator));
+		scrollIntoView(element);
+	}
+
+	/**
+	 * Finds the release element matching the given label from an already-collected
+	 * list, normalizing non-breaking spaces so exact text comparison is reliable.
+	 */
+	public WebElement findReleaseByLabel(List<WebElement> releases, String label) {
+		for (WebElement release : releases) {
+			String text = release.getText().replace('\u00A0', ' ').trim();
+			if (text.equals(label)) {
+				return release;
+			}
+		}
+		throw new NoSuchElementException("Release item not found: " + label);
+	}
+
+	public void scrollAndVerify(WebElement element, String label) {
+		scrollIntoView(element);
+		Assert.assertTrue(wait.until(ExpectedConditions.visibilityOf(element)).isDisplayed(),
+				label + " is not visible");
+		System.out.println(label + " verified");
+	}
+
 }
