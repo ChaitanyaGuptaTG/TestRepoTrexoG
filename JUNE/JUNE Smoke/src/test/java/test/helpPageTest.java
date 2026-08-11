@@ -44,4 +44,11 @@ public class helpPageTest extends BaseTest {
         helpPage.clickHelpIcon();
         helpPage.searchReleaseNotes();
     }
+
+    @Test(priority = 4, description = "Verify FAQs page with categories, questions and answers")
+    public void testFAQsPage() {
+        System.out.println("Starting test case 5 for FAQs page");
+        helpPage.clickHelpIcon();
+        helpPage.clickFAQs();
+    }
 }
