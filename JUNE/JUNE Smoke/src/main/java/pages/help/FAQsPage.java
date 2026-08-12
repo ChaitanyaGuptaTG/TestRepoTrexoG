@@ -112,6 +112,12 @@ public class FAQsPage extends BasePage {
         verifyBibliographicFAQs();
         verifyDocumentGenerationFAQs();
         verifyIDSFAQs();
+        verifyPatentFileWrapperDownloaderFAQs();
+        verifyAppGenFAQs();
+        verifyOathDecAdsFAQs();
+        verifyOAShellDraftFAQs();
+        verifyClaimsFormatterFAQs();
+        verifySupportHelpFAQs();
 
         ScreenshotUtil.captureScreenshot(driver, "faqPageVerified");
         scrollToElement(faqBackButton);
@@ -245,14 +251,93 @@ public class FAQsPage extends BasePage {
         runComingSoon(correspondingRefCheckSub, "Corresponding RefCheck");
         runSubcategoryFAQs(sb08GeneratorSub, "SB-08 Generator",
                 IDSFAQData.SB08_GENERATOR);
+        runSubcategoryFAQs(removeEmbeddedFontsSub, "Remove Embedded Fonts",
+                IDSFAQData.REMOVE_EMBEDDED_FONTS);
+        runSubcategoryFAQs(referenceExtractorSub, "Reference Extractor",
+                IDSFAQData.REFERENCE_EXTRACTOR);
+        runSubcategoryFAQs(referenceDownloaderSub, "Reference Downloader",
+                IDSFAQData.REFERENCE_DOWNLOADER);
+        runSubcategoryFAQs(referenceCountSub, "Reference Count", IDSFAQData.REFERENCE_COUNT);
 
-        // Uncomment as you add FAQ data:
-        // runSubcategoryFAQs(removeEmbeddedFontsSub, "Remove Embedded Fonts", IDSFAQData.REMOVE_EMBEDDED_FONTS);
-        // runSubcategoryFAQs(referenceExtractorSub, "Reference Extractor", IDSFAQData.REFERENCE_EXTRACTOR);
-        // runSubcategoryFAQs(referenceDownloaderSub, "Reference Downloader", IDSFAQData.REFERENCE_DOWNLOADER);
-        // runSubcategoryFAQs(referenceCountSub, "Reference Count", IDSFAQData.REFERENCE_COUNT);
     }
 
+    private void verifyPatentFileWrapperDownloaderFAQs() {
+        System.out.println("\n=== Patent File Wrapper Downloader FAQs ===");
+        expandDropdown(patentFileWrapperDownloader);
+        System.out.println("Clicked Patent File Wrapper Downloader");
+
+        FAQEntry[] faqs = PatentFileWrapperDownloaderData.PATENT_FILE_WRAPPER_DOWNLOADER;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_patent_file_wrapper_downloader_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " Patent File Wrapper Downloader FAQs verified");
+    }
+
+    private void verifyAppGenFAQs() {
+        System.out.println("\n=== AppGen FAQs ===");
+        expandDropdown(appGen);
+        System.out.println("Clicked AppGen");
+
+        FAQEntry[] faqs = AppGenFAQData.APP_GEN;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_appgen_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " AppGen FAQs verified");
+    }
+
+    private void verifyOathDecAdsFAQs() {
+        System.out.println("\n=== Oath/Dec & ADS Downloader FAQs ===");
+        expandDropdown(oathDecAdsDownloader);
+        System.out.println("Clicked Oath/Dec & ADS Downloader");
+
+        FAQEntry[] faqs = OathDecAdsFAQData.OATH_DEC_ADS_DOWNLOADER;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_oath_dec_ads_downloader_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " Oath/Dec & ADS Downloader FAQs verified");
+    }
+
+    private void verifyOAShellDraftFAQs() {
+        System.out.println("\n=== OA Shell Draft FAQs ===");
+        expandDropdown(oaShellDraft);
+        System.out.println("Clicked OA Shell Draft");
+
+        FAQEntry[] faqs = OAShellDraftFAQData.OA_SHELL_DRAFT;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_oa_shell_draft_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " OA Shell Draft FAQs verified");
+    }
+
+    private void verifyClaimsFormatterFAQs() {
+        System.out.println("\n=== Claims Formatter FAQs ===");
+        expandDropdown(claimsFormatter);
+        System.out.println("Clicked Claims Formatter");
+
+        FAQEntry[] faqs = ClaimsFormatterFAQData.CLAIMS_FORMATTER;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_claims_formatter_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " Claims Formatter FAQs verified");
+    }
+
+    private void verifySupportHelpFAQs() {
+        System.out.println("\n=== Support & Help FAQs ===");
+        expandDropdown(supportHelp);
+        System.out.println("Clicked Support & Help");
+
+        FAQEntry[] faqs = SupportHelpFAQData.SUPPORT_HELP;
+        System.out.println("Total FAQ questions to verify: " + faqs.length);
+        for (int i = 0; i < faqs.length; i++) {
+            verifyAccordion(faqs[i], "faq_support_help_q" + (i + 1));
+        }
+        System.out.println("\n  All " + faqs.length + " Support & Help FAQs verified");
+    }
 
     private void runSubcategoryFAQs(By subcategoryLocator, String subcategoryName, FAQEntry[] faqs) {
         System.out.println("\n  --- " + subcategoryName + " FAQs ---");
@@ -308,8 +393,8 @@ public class FAQsPage extends BasePage {
         System.out.println("    A: " + answerText.substring(0,
                 Math.min(80, answerText.length())) + "...");
 
-        String normalizedAnswerText = normalizeQuotes(answerText);
-        String normalizedExpectedAnswer = normalizeQuotes(entry.getExpectedAnswer());
+        String normalizedAnswerText = normalizeWhitespace(normalizeQuotes(answerText));
+        String normalizedExpectedAnswer = normalizeWhitespace(normalizeQuotes(entry.getExpectedAnswer()));
         Assert.assertTrue(normalizedAnswerText.contains(normalizedExpectedAnswer),
                 "Expected answer missing for: " + entry.getQuestion()
                         + "\nExpected: " + entry.getExpectedAnswer()
@@ -325,6 +410,10 @@ public class FAQsPage extends BasePage {
                 .replace('’', '\'')
                 .replace('“', '"')
                 .replace('”', '"');
+    }
+
+    private String normalizeWhitespace(String text) {
+        return text.replaceAll("\\s+", " ").trim();
     }
 
     private void verifySubcategories(By[] locators, String[] names) {

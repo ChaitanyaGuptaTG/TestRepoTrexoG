@@ -9,13 +9,15 @@ import utils.ScreenshotUtil;
 public class HelpMenuPage extends BasePage {
 
     private final By juneIcon = By.cssSelector("img[alt='JUNE']");
-    private final By helpIcon = By.xpath("//button[normalize-space()='Help']");
+    private final By helpIcon = By.xpath("//button[.//*[@data-testid='HelpOutlineIcon'] and normalize-space()='Help']");
     private final By feedbackOption = By.xpath("//li[contains(text(),'Feedback')]");
     private final By releaseNotesOption = By.xpath("//li[contains(text(),'Release Notes')]");
     private final By faqsOption = By.xpath("//li[contains(text(),'FAQ')]");
     private final By tutorialOption = By.xpath("//li[contains(text(),'Tutorial')]");
 
-    public HelpMenuPage(WebDriver driver) { super(driver); }
+    public HelpMenuPage(WebDriver driver) {
+        super(driver);
+    }
 
     public void clickJuneIcon() {
         safeClick(juneIcon);
