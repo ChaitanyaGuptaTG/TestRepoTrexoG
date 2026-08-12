@@ -41,6 +41,10 @@ public class HelpMenuPage extends BasePage {
         waitVisible(faqsOption).click();
     }
 
+    public void clickTutorialOption() {
+        waitVisible(tutorialOption).click();
+    }
+
     public void checkElementsOfHelpIcon() {
         Assert.assertTrue(waitVisible(feedbackOption).isDisplayed(),
                 "Feedback option is not displayed");
