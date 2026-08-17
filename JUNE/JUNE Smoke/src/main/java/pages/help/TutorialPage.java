@@ -274,31 +274,52 @@ public class TutorialPage extends BasePage {
             safeClick(playButton);
         }
 
-        WebElement video = waitVisible(videoPlayer);
-        String src = video.getAttribute("src");
+        // Re-locate the video element fresh at each step below: React re-renders the
+        // player around playback start, which can stale-out a reference held across steps.
+        String src = waitVisible(videoPlayer).getAttribute("src");
         Assert.assertTrue(src != null && !src.isEmpty(), "Video src is empty for " + topicName);
         System.out.println("    Video src present for " + topicName);
-        Assert.assertNotNull(video.getAttribute("controls"), "Video controls attribute missing for " + topicName);
+        Assert.assertNotNull(waitVisible(videoPlayer).getAttribute("controls"),
+                "Video controls attribute missing for " + topicName);
 
         JavascriptExecutor js = (JavascriptExecutor) driver;
 
+        // The video element being present doesn't mean it's playing - e.g. on the
+        // default-selected tab the modal can open with the video already paused at 0:00.
+        // Clicking the app's play overlay or the native control bar is unreliable to target
+        // precisely, so start playback directly; ChromeOptions disables the autoplay-gesture
+        // requirement (see BaseTest) so this isn't blocked by Chrome's autoplay policy.
+        if (Boolean.TRUE.equals(js.executeScript("return arguments[0].paused;", waitVisible(videoPlayer)))) {
+            js.executeScript("arguments[0].play();", waitVisible(videoPlayer));
+        }
+
         try {
-            wait.until(d -> Boolean.FALSE.equals(js.executeScript("return arguments[0].paused;", video)));
+            wait.until(d -> Boolean.FALSE.equals(
+                    js.executeScript("return arguments[0].paused;", waitVisible(videoPlayer))));
         } catch (TimeoutException e) {
             Assert.fail("Video did not start playing for " + topicName + " within 30s");
         }
         System.out.println("    Video playback started for " + topicName);
 
-        Long readyState = (Long) js.executeScript("return arguments[0].readyState;", video);
+        // `paused` flips to false synchronously on play(), but readyState climbs
+        // asynchronously as data buffers in - wait for it rather than checking once.
+        Long readyState = null;
+        try {
+            readyState = wait.until(d -> {
+                Long rs = (Long) js.executeScript("return arguments[0].readyState;", waitVisible(videoPlayer));
+                return (rs != null && rs >= 2) ? rs : null;
+            });
+        } catch (TimeoutException ignored) {
+        }
         Assert.assertTrue(readyState != null && readyState >= 2,
                 "Video has not loaded playable data for " + topicName + " (readyState=" + readyState + ")");
 
-        Double t1 = (Double) js.executeScript("return arguments[0].currentTime;", video);
+        Double t1 = (Double) js.executeScript("return arguments[0].currentTime;", waitVisible(videoPlayer));
         try {
             Thread.sleep(500);
         } catch (InterruptedException ignored) {
         }
-        Double t2 = (Double) js.executeScript("return arguments[0].currentTime;", video);
+        Double t2 = (Double) js.executeScript("return arguments[0].currentTime;", waitVisible(videoPlayer));
         Assert.assertTrue(t2 > t1,
                 "Video currentTime did not advance for " + topicName + " (t1=" + t1 + ", t2=" + t2 + ")");
         System.out.println("    Video is playing (currentTime advanced from " + t1 + " to " + t2 + ")");
