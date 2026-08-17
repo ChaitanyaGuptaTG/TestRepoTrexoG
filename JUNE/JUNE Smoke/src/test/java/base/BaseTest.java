@@ -100,6 +100,9 @@ public class BaseTest {
 			options.addArguments("--disable-extensions");
 			options.addArguments("--disable-dev-shm-usage");
 			options.addArguments("--disable-session-crashed-bubble");
+			// Tutorial videos are started programmatically during verification; Chrome's
+			// default autoplay policy blocks that without a fresh user gesture.
+			options.addArguments("--autoplay-policy=no-user-gesture-required");
 		
 			
 

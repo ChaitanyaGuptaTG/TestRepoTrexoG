@@ -9,6 +9,7 @@ public class HelpPage extends BasePage {
     private final FeedbackPage feedback;
     private final ReleaseNotesPage releaseNotes;
     private final FAQsPage faqs;
+    private final TutorialPage tutorial;
 
     public HelpPage(WebDriver driver) {
         super(driver);
@@ -16,6 +17,7 @@ public class HelpPage extends BasePage {
         this.feedback = new FeedbackPage(driver);
         this.releaseNotes = new ReleaseNotesPage(driver);
         this.faqs = new FAQsPage(driver);
+        this.tutorial = new TutorialPage(driver);
     }
 
     public void clickJuneIcon() {
@@ -49,4 +51,10 @@ public class HelpPage extends BasePage {
         menu.clickFaqsOption();
         faqs.verifyAll();
     }
+
+    public void clickAndVerifyTutorial() {
+        menu.clickTutorialOption();
+        tutorial.verifyAll();
+    }
+
 }

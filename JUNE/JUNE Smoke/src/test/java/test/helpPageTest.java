@@ -51,4 +51,11 @@ public class helpPageTest extends BaseTest {
         helpPage.clickHelpIcon();
         helpPage.clickAndVerifyFAQs();
     }
+
+    @Test(priority = 5, description = "Verify Tutorial page with categories and video/coming-soon content")
+    public void testTutorialPage() {
+        System.out.println("Starting test case 6 for Tutorial page");
+        helpPage.clickHelpIcon();
+        helpPage.clickAndVerifyTutorial();
+    }
 }
