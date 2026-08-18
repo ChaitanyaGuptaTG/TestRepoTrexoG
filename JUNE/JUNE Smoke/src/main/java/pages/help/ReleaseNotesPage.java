@@ -8,7 +8,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.testng.Assert;
 import pages.BasePage;
 import pages.help.data.ReleaseNotesData;
-import utils.ScreenshotUtil;
 
 import java.util.List;
 
@@ -60,7 +59,6 @@ public class ReleaseNotesPage extends BasePage {
             verifyDetailPage(label);
         }
 
-        ScreenshotUtil.captureScreenshot(driver, "allReleasesVerified");
         navigateBack();
     }
 
@@ -150,8 +148,6 @@ public class ReleaseNotesPage extends BasePage {
             System.out.println("  WARNING: No content map entry for " + expectedTitle
                     + " — only structural checks applied");
         }
-        ScreenshotUtil.captureScreenshot(driver,
-                "detail_" + expectedTitle.replace(" ", "_"));
     }
 
     private void typeInSearch(String term) {
@@ -204,7 +200,6 @@ public class ReleaseNotesPage extends BasePage {
             }
         }
         Assert.assertTrue(found, term + " not found in filtered results");
-        ScreenshotUtil.captureScreenshot(driver, "search_" + term.replace(" ", "_"));
     }
 
     private void clearSearch(int expectedCount) {

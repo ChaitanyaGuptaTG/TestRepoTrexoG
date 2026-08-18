@@ -1030,4 +1030,9 @@ public class helpPage extends BasePage {
         ScreenshotUtil.captureScreenshot(driver,
                 "detail_" + expectedTitle.replace(" ", "_"));
     }
+
+    private void scrollToElement(By locator) {
+        WebElement element = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+        scrollIntoView(element);
+    }
 }

@@ -1,6 +1,7 @@
 package listeners;
 
 import com.aventstack.extentreports.*;
+import com.aventstack.extentreports.markuputils.MarkupHelper;
 import base.BaseTest;
 
 import org.openqa.selenium.WebDriver;
@@ -10,6 +11,9 @@ import utils.ScreenshotUtil;
 import utils.PlatformRetryReportStore;
 import utils.EmailUtil;
 import utils.ExecutionRunManager;
+import utils.logging.TestLogBuffer;
+
+import java.util.List;
 
 public class ExtentTestListener implements ITestListener {
 
@@ -18,6 +22,9 @@ public class ExtentTestListener implements ITestListener {
 
 	@Override
 	public void onTestStart(ITestResult result) {
+		// Fresh slate so logs from a previous test method on this (possibly reused)
+		// thread don't bleed into this one.
+		TestLogBuffer.clear();
 		ExtentTest extentTest = extent.createTest(result.getMethod().getMethodName());
 		test.set(extentTest);
 	}
@@ -25,6 +32,7 @@ public class ExtentTestListener implements ITestListener {
 	@Override
 	public void onTestSuccess(ITestResult result) {
 		test.get().pass("Test Passed");
+		attachExecutionLogs(test.get());
 	}
 
 	@Override
@@ -35,11 +43,27 @@ public class ExtentTestListener implements ITestListener {
 		String screenshotPath = ScreenshotUtil.captureScreenshot(driver, result.getMethod().getMethodName());
 		test.get().fail(result.getThrowable());
 		test.get().addScreenCaptureFromPath(screenshotPath);
+		attachExecutionLogs(test.get());
 	}
 
 	@Override
 	public void onTestSkipped(ITestResult result) {
 		test.get().skip("Test Skipped");
+		attachExecutionLogs(test.get());
+	}
+
+	/**
+	 * Drains this thread's captured log lines (console + file logging is untouched -
+	 * see ExtentTestAppender) and attaches them under a collapsible "Execution Logs"
+	 * node on the test, rendered as a monospace code block with timestamps intact.
+	 */
+	private void attachExecutionLogs(ExtentTest extentTest) {
+		List<String> lines = TestLogBuffer.drainAndClear();
+		if (lines.isEmpty()) {
+			return;
+		}
+		String combined = String.join("", lines);
+		extentTest.createNode("Execution Logs").info(MarkupHelper.createCodeBlock(combined));
 	}
 
 	@Override

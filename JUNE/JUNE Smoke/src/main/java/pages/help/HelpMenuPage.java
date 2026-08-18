@@ -4,7 +4,6 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.testng.Assert;
 import pages.BasePage;
-import utils.ScreenshotUtil;
 
 public class HelpMenuPage extends BasePage {
 
@@ -61,7 +60,5 @@ public class HelpMenuPage extends BasePage {
         Assert.assertTrue(waitVisible(tutorialOption).isDisplayed(),
                 "Tutorial option is not displayed");
         System.out.println("Tutorial option is displayed");
-
-        ScreenshotUtil.captureScreenshot(driver, "helpMenuElements");
     }
 }

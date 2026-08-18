@@ -7,7 +7,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.testng.Assert;
 import pages.BasePage;
 import pages.help.data.*;
-import utils.ScreenshotUtil;
 
 public class FAQsPage extends BasePage {
 
@@ -119,7 +118,6 @@ public class FAQsPage extends BasePage {
         verifyClaimsFormatterFAQs();
         verifySupportHelpFAQs();
 
-        ScreenshotUtil.captureScreenshot(driver, "faqPageVerified");
         scrollToElement(faqBackButton);
         waitVisible(faqBackButton).click();
         System.out.println("Clicked the back button");
@@ -358,8 +356,6 @@ public class FAQsPage extends BasePage {
         Assert.assertTrue(waitVisible(comingSoonText).isDisplayed(),
                 "Coming Soon text not visible for " + subcategoryName);
         System.out.println("  Coming Soon page verified");
-        ScreenshotUtil.captureScreenshot(driver,
-                "faq_coming_soon_" + subcategoryName.replace(" ", "_").replace("/", "_"));
     }
 
     private void verifyAccordion(FAQEntry entry, String screenshotName) {
@@ -400,8 +396,6 @@ public class FAQsPage extends BasePage {
                         + "\nExpected: " + entry.getExpectedAnswer()
                         + "\nActual: " + answerText);
         System.out.println("    Answer content verified");
-
-        ScreenshotUtil.captureScreenshot(driver, screenshotName);
     }
 
     private String normalizeQuotes(String text) {

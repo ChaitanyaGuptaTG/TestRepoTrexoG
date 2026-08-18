@@ -12,7 +12,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
 import pages.BasePage;
-import utils.ScreenshotUtil;
 
 public class TutorialPage extends BasePage {
 
@@ -125,7 +124,6 @@ public class TutorialPage extends BasePage {
         verifyOAShellDraftTutorial();
         verifyClaimsFormatterTutorial();
 
-        ScreenshotUtil.captureScreenshot(driver, "tutorialPageVerified");
         scrollToElement(tutorialBackButton);
         waitVisible(tutorialBackButton).click();
         System.out.println("Clicked the back button");
@@ -259,11 +257,9 @@ public class TutorialPage extends BasePage {
             Assert.assertTrue(waitVisible(comingSoonText).isDisplayed(),
                     "Coming Soon message not visible for " + topicName);
             System.out.println("    Coming Soon content verified for " + topicName);
-            ScreenshotUtil.captureScreenshot(driver, screenshotName);
         } else {
             Assert.assertTrue(waitVisible(videoCard).isDisplayed(), "Video card not visible for " + topicName);
             System.out.println("    Video card verified for " + topicName);
-            ScreenshotUtil.captureScreenshot(driver, screenshotName);
             verifyVideoPlayback(topicName, screenshotName);
         }
     }
@@ -324,7 +320,6 @@ public class TutorialPage extends BasePage {
                 "Video currentTime did not advance for " + topicName + " (t1=" + t1 + ", t2=" + t2 + ")");
         System.out.println("    Video is playing (currentTime advanced from " + t1 + " to " + t2 + ")");
 
-        ScreenshotUtil.captureScreenshot(driver, screenshotName + "_playing");
         closeVideoModal();
     }
 
