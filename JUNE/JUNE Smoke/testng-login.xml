@@ -3,7 +3,8 @@
 <suite name="Login Suite">
     <test name="Login Test">
         <classes>
-            <class name="test.LoginTest"/>
+<!--            <class name="test.idsPageTest"/>-->
+            <class name="test.helpPageTest"/>
         </classes>
     </test>
 </suite>

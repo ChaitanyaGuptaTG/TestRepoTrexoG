@@ -17,7 +17,7 @@ public class ExtentManager {
 			// per-test "Execution Logs" node too. Log.* output is separately captured by
 			// ExtentTestAppender (see log4j2.xml) - see ConsoleCaptureManager's Javadoc for
 			// why the two capture paths don't duplicate each other.
-			utils.logging.ConsoleCaptureManager.installOnce();
+//			utils.logging.ConsoleCaptureManager.installOnce();
 
 			ExtentSparkReporter reporter = new ExtentSparkReporter("test-output/ExtentReport.html");
 

@@ -16,6 +16,12 @@ import utils.Log;
 import utils.ScreenshotUtil;
 import utils.PlatformRetryReportStore;
 
+/**
+ * Registered here (not only in testng.xml) so failure screenshots and Extent
+ * reporting still fire when a test class is run directly from the IDE, which
+ * builds its own temp suite and ignores testng.xml's &lt;listeners&gt; block.
+ */
+@Listeners(listeners.ExtentTestListener.class)
 public class BaseTest {
 
 

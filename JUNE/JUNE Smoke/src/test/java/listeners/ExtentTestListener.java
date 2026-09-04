@@ -7,6 +7,7 @@ import base.BaseTest;
 import org.openqa.selenium.WebDriver;
 import org.testng.*;
 import utils.ExtentManager;
+import utils.Log;
 import utils.ScreenshotUtil;
 import utils.PlatformRetryReportStore;
 import utils.EmailUtil;
@@ -27,12 +28,14 @@ public class ExtentTestListener implements ITestListener {
 		TestLogBuffer.clear();
 		ExtentTest extentTest = extent.createTest(result.getMethod().getMethodName());
 		test.set(extentTest);
+		Log.setTest(extentTest);
 	}
 
 	@Override
 	public void onTestSuccess(ITestResult result) {
 		test.get().pass("Test Passed");
 		attachExecutionLogs(test.get());
+		Log.clear();
 	}
 
 	@Override
@@ -44,12 +47,14 @@ public class ExtentTestListener implements ITestListener {
 		test.get().fail(result.getThrowable());
 		test.get().addScreenCaptureFromPath(screenshotPath);
 		attachExecutionLogs(test.get());
+		Log.clear();
 	}
 
 	@Override
 	public void onTestSkipped(ITestResult result) {
 		test.get().skip("Test Skipped");
 		attachExecutionLogs(test.get());
+		Log.clear();
 	}
 
 	/**
