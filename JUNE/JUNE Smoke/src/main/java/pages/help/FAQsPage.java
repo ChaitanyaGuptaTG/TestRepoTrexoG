@@ -1,14 +1,24 @@
 package pages.help;
 
+import java.time.Duration;
+
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
+import org.testng.asserts.SoftAssert;
 import pages.BasePage;
 import pages.help.data.*;
 
 public class FAQsPage extends BasePage {
+
+    // Fresh instance per verifyAll() run so a broken subcategory (e.g. content
+    // reverted to "Coming Soon") is recorded as a failure but doesn't stop the
+    // rest of the page from being checked. Collected failures are all reported
+    // together at the end via assertAll().
+    private SoftAssert softAssert = new SoftAssert();
 
     private final By faqsTitle = By.xpath("//h1[normalize-space()='FAQs']");
     private final By faqBackButton = By.xpath("//h1[normalize-space()='FAQs']//button");
@@ -37,11 +47,8 @@ public class FAQsPage extends BasePage {
     private final By supportHelp = By.xpath(
             "//p[contains(@class,'MuiTypography-body2')][contains(text(),'Support')]");
 
-    // Beta badges
-    private final By patentDownloaderBeta = By.xpath(
-            "//p[contains(normalize-space(), 'Patent File Wrapper Downloader')]/button[normalize-space()='Beta']");
-    private final By claimsFormatterBeta = By.xpath(
-            "//p[contains(normalize-space(), 'Claims Formatter')]/button[normalize-space()='Beta']");
+    // Patent File Wrapper Downloader and Claims Formatter both graduated out of Beta -
+    // no badges expected for either anymore.
 
     // Bibliographic Data Extraction subcategories
     private final By usTrademarkSub = By.xpath(
@@ -102,11 +109,12 @@ public class FAQsPage extends BasePage {
     }
 
     public void verifyAll() {
+        softAssert = new SoftAssert();
+
         Assert.assertTrue(waitVisible(faqsTitle).isDisplayed(), "FAQs title is not visible");
         System.out.println("FAQs title is displayed");
 
         verifySidebarCategories();
-        verifyBetaBadges();
         verifyGettingStartedFAQs();
         verifyBibliographicFAQs();
         verifyDocumentGenerationFAQs();
@@ -121,6 +129,8 @@ public class FAQsPage extends BasePage {
         scrollToElement(faqBackButton);
         waitVisible(faqBackButton).click();
         System.out.println("Clicked the back button");
+
+        softAssert.assertAll();
     }
 
     private void verifySidebarCategories() {
@@ -139,24 +149,12 @@ public class FAQsPage extends BasePage {
         System.out.println("  All " + categories.length + " sidebar categories verified");
     }
 
-    private void verifyBetaBadges() {
-        System.out.println("\n--- Beta Badges ---");
-        scrollToElement(patentDownloaderBeta);
-        Assert.assertTrue(waitVisible(patentDownloaderBeta).isDisplayed(),
-                "Patent File Wrapper Downloader Beta badge is not visible");
-        System.out.println("  Patent File Wrapper Downloader Beta badge verified");
-        scrollToElement(claimsFormatterBeta);
-        Assert.assertTrue(waitVisible(claimsFormatterBeta).isDisplayed(),
-                "Claims Formatter Beta badge is not visible");
-        System.out.println("  Claims Formatter Beta badge verified");
-    }
-
     private void verifyGettingStartedFAQs() {
         System.out.println("\n--- Getting Started FAQs ---");
         FAQEntry[] faqs = GettingStartedFAQData.FAQS;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_getting_started_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "Getting Started");
         }
         System.out.println("\n  All " + faqs.length + " Getting Started FAQs verified");
     }
@@ -236,17 +234,17 @@ public class FAQsPage extends BasePage {
         expandDropdown(ids);
 
         verifySubcategories(
-                new By[]{downloader1449892Sub, correspondingRefCheckSub, sb08GeneratorSub,
+                new By[]{downloader1449892Sub, /* correspondingRefCheckSub, */ sb08GeneratorSub,
                         removeEmbeddedFontsSub, referenceExtractorSub,
                         referenceDownloaderSub, referenceCountSub},
-                new String[]{"1449 and 892 Downloader", "Corresponding RefCheck",
+                new String[]{"1449 and 892 Downloader", /* "Corresponding RefCheck", */
                         "SB-08 Generator", "Remove Embedded Fonts", "Reference Extractor",
                         "Reference Downloader", "Reference Count"}
         );
 
         runSubcategoryFAQs(downloader1449892Sub, "1449 and 892 Downloader",
                 IDSFAQData.DOWNLOADER_1449_892);
-        runComingSoon(correspondingRefCheckSub, "Corresponding RefCheck");
+//        runComingSoon(correspondingRefCheckSub, "Corresponding RefCheck"); // in prod this is not deployed!
         runSubcategoryFAQs(sb08GeneratorSub, "SB-08 Generator",
                 IDSFAQData.SB08_GENERATOR);
         runSubcategoryFAQs(removeEmbeddedFontsSub, "Remove Embedded Fonts",
@@ -267,7 +265,7 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = PatentFileWrapperDownloaderData.PATENT_FILE_WRAPPER_DOWNLOADER;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_patent_file_wrapper_downloader_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "Patent File Wrapper Downloader");
         }
         System.out.println("\n  All " + faqs.length + " Patent File Wrapper Downloader FAQs verified");
     }
@@ -280,7 +278,7 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = AppGenFAQData.APP_GEN;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_appgen_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "AppGen");
         }
         System.out.println("\n  All " + faqs.length + " AppGen FAQs verified");
     }
@@ -293,7 +291,7 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = OathDecAdsFAQData.OATH_DEC_ADS_DOWNLOADER;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_oath_dec_ads_downloader_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "Oath/Dec & ADS Downloader");
         }
         System.out.println("\n  All " + faqs.length + " Oath/Dec & ADS Downloader FAQs verified");
     }
@@ -306,7 +304,7 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = OAShellDraftFAQData.OA_SHELL_DRAFT;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_oa_shell_draft_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "OA Shell Draft");
         }
         System.out.println("\n  All " + faqs.length + " OA Shell Draft FAQs verified");
     }
@@ -319,7 +317,7 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = ClaimsFormatterFAQData.CLAIMS_FORMATTER;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_claims_formatter_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "Claims Formatter");
         }
         System.out.println("\n  All " + faqs.length + " Claims Formatter FAQs verified");
     }
@@ -332,35 +330,59 @@ public class FAQsPage extends BasePage {
         FAQEntry[] faqs = SupportHelpFAQData.SUPPORT_HELP;
         System.out.println("Total FAQ questions to verify: " + faqs.length);
         for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i], "faq_support_help_q" + (i + 1));
+            verifyAccordionSoft(faqs[i], "Support & Help");
         }
         System.out.println("\n  All " + faqs.length + " Support & Help FAQs verified");
     }
 
     private void runSubcategoryFAQs(By subcategoryLocator, String subcategoryName, FAQEntry[] faqs) {
         System.out.println("\n  --- " + subcategoryName + " FAQs ---");
-        expandDropdown(subcategoryLocator);
-        System.out.println("  Clicked " + subcategoryName);
+        try {
+            expandDropdown(subcategoryLocator);
+            System.out.println("  Clicked " + subcategoryName);
 
-        for (int i = 0; i < faqs.length; i++) {
-            verifyAccordion(faqs[i],
-                    "faq_" + subcategoryName.replace(" ", "_").replace("/", "_") + "_q" + (i + 1));
+            for (int i = 0; i < faqs.length; i++) {
+                verifyAccordion(faqs[i],
+                        "faq_" + subcategoryName.replace(" ", "_").replace("/", "_") + "_q" + (i + 1));
+            }
+            System.out.println("\n  All " + faqs.length + " " + subcategoryName + " FAQs verified");
+        } catch (Throwable t) {
+            System.out.println("  ERROR in " + subcategoryName + " FAQs: " + t.getMessage());
+            softAssert.fail(subcategoryName + " FAQs failed: " + t.getMessage());
         }
-        System.out.println("\n  All " + faqs.length + " " + subcategoryName + " FAQs verified");
     }
 
     private void runComingSoon(By subcategoryLocator, String subcategoryName) {
         System.out.println("\n  --- " + subcategoryName + " ---");
-        expandDropdown(subcategoryLocator);
+        try {
+            expandDropdown(subcategoryLocator);
+            Assert.assertTrue(waitVisible(comingSoonText).isDisplayed(),
+                    "Coming Soon text not visible for " + subcategoryName);
+            System.out.println("  Coming Soon page verified");
+        } catch (Throwable t) {
+            System.out.println("  ERROR verifying " + subcategoryName + ": " + t.getMessage());
+            softAssert.fail(subcategoryName + " verification failed: " + t.getMessage());
+        }
+    }
 
-        Assert.assertTrue(waitVisible(comingSoonText).isDisplayed(),
-                "Coming Soon text not visible for " + subcategoryName);
-        System.out.println("  Coming Soon page verified");
+    private void verifyAccordionSoft(FAQEntry entry, String categoryName) {
+        try {
+            verifyAccordion(entry, null);
+        } catch (Throwable t) {
+            System.out.println("  ERROR verifying '" + entry.getQuestion() + "': " + t.getMessage());
+            softAssert.fail(categoryName + " FAQ failed for '" + entry.getQuestion() + "': " + t.getMessage());
+        }
     }
 
     private void verifyAccordion(FAQEntry entry, String screenshotName) {
         By questionLocator = entry.getLocator();
-        scrollToElement(questionLocator);
+        // Short timeout for this lookup only: a rendered accordion appears within ~1s
+        // of the dropdown expand, so if it's still missing after 5s (e.g. the subcategory
+        // reverted to "Coming Soon"), waiting the full 30s here just wastes minutes across
+        // a broken subcategory's whole question list without changing the outcome.
+        WebElement questionPresent = new WebDriverWait(driver, Duration.ofSeconds(5))
+                .until(ExpectedConditions.presenceOfElementLocated(questionLocator));
+        scrollIntoView(questionPresent);
         WebElement questionElement = waitVisible(questionLocator);
         System.out.println("\n    " + entry.getQuestion());
 
@@ -412,9 +434,14 @@ public class FAQsPage extends BasePage {
 
     private void verifySubcategories(By[] locators, String[] names) {
         for (int i = 0; i < locators.length; i++) {
-            scrollToElement(locators[i]);
-            Assert.assertTrue(waitVisible(locators[i]).isDisplayed(), names[i] + " subcategory is not visible");
-            System.out.println("  Subcategory verified: " + names[i]);
+            try {
+                scrollToElement(locators[i]);
+                Assert.assertTrue(waitVisible(locators[i]).isDisplayed(), names[i] + " subcategory is not visible");
+                System.out.println("  Subcategory verified: " + names[i]);
+            } catch (Throwable t) {
+                System.out.println("  ERROR verifying subcategory '" + names[i] + "': " + t.getMessage());
+                softAssert.fail(names[i] + " subcategory check failed: " + t.getMessage());
+            }
         }
     }
 

@@ -1,515 +1,554 @@
 package pages.IDSPage;
 
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.ImageType;
-import org.apache.pdfbox.rendering.PDFRenderer;
 import org.openqa.selenium.By;
+import org.openqa.selenium.HasCapabilities;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.Platform;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
 import pages.BasePage;
 import utils.ConfigReader;
+import utils.Log;
 import utils.OutputFileWorkflowManager;
-import org.openqa.selenium.Platform;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import api.clients.UsptoDocumentClient;
+
+
 public class idsMenuPage extends BasePage {
 
-    // ───────────────────────── Locators ─────────────────────────
 
-    private final By idsDropdown = By.xpath("//div[@role='combobox' and .//span[text()='IDS']]");
-    private final By idsDropdownSpan = By.xpath("//span[text()='IDS']");
-    private final By idsDocumentDownloaderOption = By.xpath("//li[@role='option' and contains(.,'1449 and 892 Downloader')]");
-    private final By idsDocumentDownloaderLabel = By.xpath("//span[normalize-space()='1449 and 892 Downloader']");
-    private final By applicationNumbersInstruction = By.xpath("(//span[contains(text(),'Please enter the application numbers')])[last()]");
-    private final By queryInput = By.xpath("//*[@placeholder='Enter your query or select a task to get started']");
-    private final By submitButton = By.xpath("//*[name()='svg' and @data-testid='SendOutlinedIcon']");
-    private final By stopButton = By.xpath("//*[name()='svg' and @data-testid='StopCircleOutlinedIcon']");
+    private static final Duration UI_TIMEOUT = Duration.ofSeconds(30);
 
-    private final By cancelConfirmationText = By.xpath("//h5[text()='Are you sure you want to cancel the request?']");
-    private final By cancelNoButton = By.xpath("//h5[text()='Are you sure you want to cancel the request?']/ancestor::div//button[normalize-space()='No']");
-    private final By cancelYesButton = By.xpath("//h5[text()='Are you sure you want to cancel the request?']/ancestor::div//button[normalize-space()='Yes']");
 
-    private final By completionMessage = By.xpath("(//p[contains(text(),'Your task with Request ID') and contains(text(),'has been completed')])[last()]");
-    private final By downloadLink = By.xpath("(//a[@download and contains(@href, '1449') and contains(@href, '.zip')])[last()]");
-    private final By requestIdMessage = By.xpath("(//p[contains(text(),'Request ID')])[last()]");
+    private static final Duration QUICK_PROBE_TIMEOUT = Duration.ofSeconds(5);
 
-    private final By continueConfirmationText = By.xpath("(//span[contains(text(),'Would you like to continue with 1449 and 892 Downloader')])[last()]");
-    private final By continueYesButton = By.xpath("(//span[contains(text(),'Would you like to continue')]/ancestor::div//button[normalize-space()='Yes'])[last()]");
-    private final By continueNoButton = By.xpath("(//span[contains(text(),'Would you like to continue')]/ancestor::div//button[normalize-space()='No'])[last()]");
 
-    private final By queryInputBox = By.cssSelector("textarea[placeholder='Enter your query or select a task to get started']");
+    private static final Duration BACKEND_TIMEOUT = Duration.ofSeconds(30);
 
-    private final By workflowExitedMessage = By.xpath("(//*[contains(text(),'Enter your query or select a task to get started')])[last()]");
-    private final By trackTaskButton = By.xpath("//span[text()='Track Task']/ancestor::button");
-    private final By attachFileIcon = By.xpath("//*[name()='svg' and @data-testid='AttachFileIcon']");
+
+    private static final int DOWNLOAD_TIMEOUT_SECONDS = 30;
+
+
+    private static final long DOWNLOAD_POLL_MILLIS = 1000L;
+
+
+    private static final long CLOCK_SKEW_SLACK_SECONDS = 1L;
+
+    private static final String FORM_1449 = "1449";
+    private static final String FORM_892 = "892";
+    private static final String PDF_SUFFIX = ".pdf";
+    private static final String DOWNLOADER_NAME = "1449 and 892 Downloader";
+    private static final String QUERY_PLACEHOLDER = "Enter your query or select a task to get started";
+
+    // Real 1449s/892s produced by this workflow are comfortably above these -
+    // a file below threshold is a truncated/near-empty download, not a real form.
+    private static final long MIN_SIZE_1449_BYTES = 10_000L;
+    private static final long MIN_SIZE_892_BYTES = 5_000L;
+
+    // Naming convention this workflow's zip entries follow: {appNum}_{formType}_{dd-MMM-yyyy}[_N].pdf
+    private static final String FILENAME_PATTERN_SUFFIX = "_\\d{2}-[A-Z][a-z]{2}-\\d{4}(_\\d+)?\\.pdf";
+
+
+    private static final By IDS_DROPDOWN = By.xpath("//div[@role='combobox' and .//span[text()='IDS']]");
+
+    private static final By DOWNLOADER_OPTION = By.xpath("//li[@role='option' and contains(.,'" + DOWNLOADER_NAME + "')]");
+
+    private static final By DOWNLOADER_LABEL = By.xpath("//span[normalize-space()='" + DOWNLOADER_NAME + "']");
+
+    private static final By APP_NUMBERS_INSTRUCTION = By.xpath("(//span[contains(text(),'Please enter the application numbers')])[last()]");
+
+    private static final By QUERY_INPUT = By.cssSelector("textarea[placeholder='" + QUERY_PLACEHOLDER + "']");
+
+    // SVG lives in its own XML namespace, so //svg does NOT work in XPath.
+    // //*[name()='svg'] is the standard workaround.
+    private static final By SUBMIT_BUTTON = By.xpath("//*[name()='svg' and @data-testid='SendOutlinedIcon']");
+
+    private static final By STOP_BUTTON = By.xpath("//*[name()='svg' and @data-testid='StopCircleOutlinedIcon']");
+
+    private static final By COMPLETION_MESSAGE = By.xpath("(//p[contains(text(),'Your task with Request ID') and contains(text(),'has been completed')])[last()]");
+
+    private static final By REQUEST_ID_MESSAGE = By.xpath("(//p[contains(text(),'Request ID')])[last()]");
+
+    /**
+     * ALL matching download links (no [last()]) - we need the full list to detect a NEW one.
+     */
+    private static final By ALL_DOWNLOAD_LINKS = By.xpath("//a[@download and contains(@href,'" + FORM_1449 + "') and contains(@href,'.zip')]");
+
+    private static final By CONTINUE_CONFIRMATION = By.xpath("(//span[contains(text(),'Would you like to continue with " + DOWNLOADER_NAME + "')])[last()]");
+
+    // ancestor::div scopes the Yes/No to THIS dialog; [last()] picks the newest one
+    // in the transcript. Both are needed - other dialogs also have Yes/No buttons.
+    private static final By CONTINUE_YES = By.xpath("(//span[contains(text(),'Would you like to continue')]/ancestor::div//button[normalize-space()='Yes'])[last()]");
+
+    private static final By CONTINUE_NO = By.xpath("(//span[contains(text(),'Would you like to continue')]/ancestor::div//button[normalize-space()='No'])[last()]");
+
+    private static final By WORKFLOW_EXITED_MESSAGE = By.xpath("(//*[contains(text(),'" + QUERY_PLACEHOLDER + "')])[last()]");
 
     private String lastDownloadHref = null;
 
-    // Standard USPTO form titles printed at the top of each document type.
-    // These are large, clean, all-caps headings — the part of a scanned form
-    // OCR reads most reliably, unlike the application number (a digit string,
-    // which OCR frequently misreads, and which is already verified
-    // deterministically via the zip folder/filename convention instead).
-    private static final String EXPECTED_TITLE_1449 = "INFORMATION DISCLOSURE STATEMENT";
-    private static final String EXPECTED_TITLE_892 = "NOTICE OF REFERENCES CITED";
+    // Built lazily (see usptoApi()) rather than in the constructor: only the 1449/892
+    // Downloader's zip-vs-API cross-check needs this, so environments without
+    // 'uspto.api.key' configured (e.g. uat/prod today) can still run the Reference
+    // Count / Reference Downloader workflows, which never touch the USPTO API.
+    private UsptoDocumentClient usptoApi;
 
     public idsMenuPage(WebDriver driver) {
         super(driver);
     }
 
-    // ───────────────────────── IDS dropdown actions ─────────────────────────
-
-    public void clickIdsDropdown() {
-        safeClick(idsDropdown);
-        System.out.println("Clicked the IDS dropdown");
+    private UsptoDocumentClient usptoApi() {
+        if (usptoApi == null) {
+            usptoApi = UsptoDocumentClient.fromConfig();
+        }
+        return usptoApi;
     }
 
-    public void verifyIdsDropdownDisabledAfterSelection() {
-        safeClick(idsDropdown);
-        boolean optionReappeared;
-        try {
-            new WebDriverWait(driver, Duration.ofSeconds(5))
-                    .until(ExpectedConditions.visibilityOfElementLocated(idsDocumentDownloaderOption));
-            optionReappeared = true;
-        } catch (TimeoutException e) {
-            optionReappeared = false;
-        }
-        Assert.assertFalse(optionReappeared, "IDS dropdown should stay disabled and not reopen once a downloader has already been selected");
-        System.out.println("Confirmed the IDS dropdown does not reopen after a downloader is selected");
+    public void clickIdsDropdown() {
+        safeClick(IDS_DROPDOWN);
+        Log.info("Opened the IDS dropdown");
     }
 
     public void selectDocumentDownloader() {
-        waitVisible(idsDocumentDownloaderOption).click();
-        System.out.println("Selected 1449 and 892 Downloader option");
+        waitVisible(DOWNLOADER_OPTION).click();
+        Log.info("Selected '{}' from the IDS dropdown", DOWNLOADER_NAME);
+    }
+
+    public void verifyIdsDropdownAvailableAfterSelection() {
+        safeClick(IDS_DROPDOWN);
+        boolean optionReappeared = isVisibleWithin(DOWNLOADER_OPTION, QUICK_PROBE_TIMEOUT);
+
+        // Close the dropdown again so this check leaves the UI exactly as it found it -
+        // callers should not have to account for a dropdown left open just because
+        // this verification ran (a second, un-closed open would otherwise toggle the
+        // dropdown shut on the next real clickIdsDropdown() call).
+        closeDropdown();
+
+        Assert.assertTrue(optionReappeared, "IDS dropdown should offer '" + DOWNLOADER_NAME + "' again once the downloader workflow has been continued/exited");
+        Log.pass("IDS dropdown is available again after the downloader workflow");
+    }
+
+    private void closeDropdown() {
+        new Actions(driver).sendKeys(Keys.ESCAPE).perform();
     }
 
     public void verifyDocumentDownloaderLabel() {
-        waitVisible(idsDocumentDownloaderLabel).isDisplayed();
-        System.out.println("1449 and 892 Downloader label is displayed");
+        Assert.assertTrue(waitVisible(DOWNLOADER_LABEL).isDisplayed(), "'" + DOWNLOADER_NAME + "' label is not displayed after selection");
+        Log.pass("'{}' label is displayed", DOWNLOADER_NAME);
     }
 
     public void verifyApplicationNumbersInstruction() {
-        waitVisible(applicationNumbersInstruction).isDisplayed();
-        System.out.println("Application numbers instruction is displayed");
+        Assert.assertTrue(waitVisible(APP_NUMBERS_INSTRUCTION).isDisplayed(), "Application numbers instruction is not displayed");
+        Log.pass("Application numbers instruction is displayed");
     }
 
     public void enterQuery(String query) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        var element = wait.until(ExpectedConditions.elementToBeClickable(queryInput));
+        Assert.assertNotNull(query, "Query to enter must not be null");
 
-        element.click(); // focus
+        WebElement input = focusAndClearQueryBox();
 
-        Keys cmdCtrl = Platform.getCurrent().is(Platform.MAC) ? Keys.COMMAND : Keys.CONTROL;
-        element.sendKeys(Keys.chord(cmdCtrl, "a"), Keys.BACK_SPACE);
-
+        // -1 keeps trailing empty strings, so intentional blank lines survive.
         String[] lines = query.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
-            element.sendKeys(lines[i]);
-            // Add Shift+Enter for every line except the very last one
+            input.sendKeys(lines[i]);
             if (i < lines.length - 1) {
-                element.sendKeys(Keys.chord(Keys.SHIFT, Keys.ENTER));
+                input.sendKeys(Keys.chord(Keys.SHIFT, Keys.ENTER));
             }
         }
 
-        System.out.println("Entered query: " + query);
+        Log.info("Entered query ({} line(s)): {}", lines.length, query.replace("\n", " | "));
     }
 
     public void enterIntentAsQuery(String intentText) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        var element = wait.until(ExpectedConditions.elementToBeClickable(queryInputBox));
-        element.click();
-        element.clear();
-        element.sendKeys(intentText);
-        System.out.println("Entered intent as query: " + intentText);
+        focusAndClearQueryBox().sendKeys(intentText);
+        Log.info("Entered intent as query: {}", intentText);
     }
 
     public void clickSubmitButton() {
-        safeClick(submitButton);
-        System.out.println("Clicked the Submit button");
+        safeClick(SUBMIT_BUTTON);
+        Log.info("Submitted the query");
     }
 
     public void clickContinueYes() {
-        waitVisible(continueConfirmationText);
-        safeClick(continueYesButton);
-        System.out.println("Clicked YES to continue with 1449 and 892 Downloader");
+        waitVisible(CONTINUE_CONFIRMATION);
+        safeClick(CONTINUE_YES);
+        Log.info("Clicked YES to continue with '{}'", DOWNLOADER_NAME);
 
-        // Wait for the UI to settle: the instruction prompt reappears once the
-        // downloader is ready for the next batch of application numbers.
-        waitVisible(applicationNumbersInstruction);
-        System.out.println("Instruction prompt reappeared — ready for next input");
+        // Wait for the EFFECT, not just the click: the instruction prompt reappearing
+        // is what proves the workflow is genuinely ready for the next batch.
+        waitVisible(APP_NUMBERS_INSTRUCTION);
+        Log.pass("Instruction prompt reappeared - ready for next input");
     }
 
     public void clickContinueNo() {
-        waitVisible(continueConfirmationText);
-        safeClick(continueNoButton);
-        System.out.println("Clicked NO — exiting 1449 and 892 Downloader workflow");
+        waitVisible(CONTINUE_CONFIRMATION);
+        safeClick(CONTINUE_NO);
+        Log.info("Clicked NO - exiting the '{}' workflow", DOWNLOADER_NAME);
 
-        waitVisible(workflowExitedMessage);
-        System.out.println("Confirmed workflow exited — 'Enter your query or select a task to get started' message shown");
+        waitVisible(WORKFLOW_EXITED_MESSAGE);
+        Log.pass("Workflow exited - chat returned to its default prompt");
     }
 
     public Path clickDownloadAndAssertTxt() {
-        Assert.assertTrue(waitVisible(completionMessage).isDisplayed(), "completionMessage not visible");
-        Assert.assertTrue(waitVisible(requestIdMessage).isDisplayed(), "requestIdMessage not visible");
-        Assert.assertTrue(driver.findElements(stopButton).isEmpty(),
-                "stopButton should not still be present once the request has completed");
+        Log.info("─── Validating download ───");
+
+        assertRequestCompleted();
 
         String previousHref = lastDownloadHref;
-        By allDownloadLinksLocator = By.xpath("//a[@download and contains(@href, '1449') and contains(@href, '.zip')]");
-        String href;
-        try {
-            href = new WebDriverWait(driver, Duration.ofSeconds(30)).until(d -> {
-                List<org.openqa.selenium.WebElement> links = d.findElements(allDownloadLinksLocator);
-                if (links.isEmpty()) return null;
-                String candidate = links.get(links.size() - 1).getAttribute("href");
-                return (candidate != null && !candidate.equals(previousHref)) ? candidate : null;
-            });
-        } catch (TimeoutException e) {
-            throw new TimeoutException("Timed out waiting for a new downloadLink href to appear "
-                    + "(still showing the previous one: " + previousHref + ")", e);
-        }
+        WebElement link = waitForNewDownloadLink(previousHref);
+        String href = hrefOf(link);
         lastDownloadHref = href;
 
-        Assert.assertTrue(href.contains("1449") && href.contains(".zip"), "downloadLink href does not match the expected 1449/.zip pattern: " + href);
-        System.out.println("downloadLink object key: " + stripQueryString(href));
-        List<org.openqa.selenium.WebElement> allDownloadLinks = driver.findElements(allDownloadLinksLocator);
-        System.out.println("Matching download links currently in DOM: " + allDownloadLinks.size());
-        for (org.openqa.selenium.WebElement el : allDownloadLinks) {
-            System.out.println("  candidate object key: " + stripQueryString(el.getAttribute("href")));
-        }
+        Log.info("New download link ready: {}", stripQueryString(href));
+        logDownloadLinkCandidates();
 
-        Instant beforeClick = Instant.now();
-        safeClick(downloadLink);
-        System.out.println("Clicked the downloadLink");
+        // Watermark BEFORE the click: anything on disk older than this is not ours.
+        Instant beforeClick = Instant.now().minusSeconds(CLOCK_SKEW_SLACK_SECONDS);
+        safeClick(link);
+        Log.info("Clicked the download link");
 
-        try {
-            Path downloadDir = OutputFileWorkflowManager.resolveIncomingDownloadDirectory(ConfigReader.loadConfig());
-            Path downloadedFile = waitForDownloadedFile(downloadDir, "1449", 30, beforeClick);
-            Assert.assertNotNull(downloadedFile, "Download did not complete: no matching file modified after " + beforeClick + " appeared in " + downloadDir + " within 30s");
-            assertValidNonEmptyZip(downloadedFile);
-            System.out.println("Downloaded file: " + downloadedFile);
-            return downloadedFile;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for download", e);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed while checking for downloaded file", e);
-        }
+        return awaitAndValidateDownloadedFile(beforeClick);
     }
 
     public void assertZipContents(Path zipPath, String... appNumbers) {
         try (ZipFile zip = new ZipFile(zipPath.toFile())) {
+            List<String> entryNames = collectEntryNames(zip);
 
-            List<String> allEntryNames = new ArrayList<>();
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                allEntryNames.add(entries.nextElement().getName());
-            }
+            Log.info("─── Zip contents: {} ({} entries) ───", zipPath.getFileName(), entryNames.size());
+            Log.debug("Full manifest:");
+            entryNames.forEach(entry -> Log.debug("    {}", entry));
 
-            System.out.println("──── Zip entries (" + allEntryNames.size() + ") ────");
-            allEntryNames.forEach(e -> System.out.println("  " + e));
-
-            // 9) No unexpected file types — only directories and .pdf files
-            for (String entry : allEntryNames) {
-                if (entry.endsWith("/")) continue; // directory
-                Assert.assertTrue(entry.toLowerCase().endsWith(".pdf"), "Unexpected non-PDF file found in zip: " + entry);
-            }
-
-            List<String[]> ocrSummaryRows = new ArrayList<>();
+            assertOnlyPdfFiles(entryNames);
 
             for (String appNum : appNumbers) {
+                List<String> appEntries = entriesUnderFolder(entryNames, appNum);
+                Assert.assertFalse(appEntries.isEmpty(),
+                        "Zip does not contain a folder for application " + appNum
+                                + ". Entries found: " + entryNames);
 
-                // 1) Top-level folder for this application number
-                List<String> appEntries = allEntryNames.stream().filter(e -> e.startsWith(appNum + "/")).collect(Collectors.toList());
-
-                Assert.assertFalse(appEntries.isEmpty(), "Zip does not contain a folder for application " + appNum + ". Entries found: " + allEntryNames);
-
-                // 2) 1449 subfolder with at least one PDF
-                List<String> form1449 = appEntries.stream().filter(e -> e.contains("/1449/") && e.toLowerCase().endsWith(".pdf")).collect(Collectors.toList());
-
-                Assert.assertFalse(form1449.isEmpty(), "No 1449 PDF found for application " + appNum + ". Entries under app folder: " + appEntries);
-
-                // 3) 892 subfolder with at least one PDF
-                List<String> form892 = appEntries.stream().filter(e -> e.contains("/892/") && e.toLowerCase().endsWith(".pdf")).collect(Collectors.toList());
-
-                Assert.assertFalse(form892.isEmpty(), "No 892 PDF found for application " + appNum + ". Entries under app folder: " + appEntries);
-
-                long minSize1449 = 10_000;  // real 1449s are 190 KB+
-                long minSize892 = 5_000;    // real 892s are ~23 KB
-
-                for (String pdfEntry : form1449) {
-                    verifyPdfEntry(zip, pdfEntry, appNum, "1449", minSize1449, ocrSummaryRows);
+                List<String> pdfs1449 = pdfsInSubfolder(appEntries, FORM_1449);
+                Assert.assertFalse(pdfs1449.isEmpty(),
+                        "No 1449 PDF found for application " + appNum
+                                + ". Entries under app folder: " + appEntries);
+                for (String pdfEntry : pdfs1449) {
+                    verifyPdfEntry(zip, pdfEntry, appNum, FORM_1449, MIN_SIZE_1449_BYTES);
                 }
 
-                for (String pdfEntry : form892) {
-                    verifyPdfEntry(zip, pdfEntry, appNum, "892", minSize892, ocrSummaryRows);
+                List<String> pdfs892 = pdfsInSubfolder(appEntries, FORM_892);
+                Assert.assertFalse(pdfs892.isEmpty(),
+                        "No 892 PDF found for application " + appNum
+                                + ". Entries under app folder: " + appEntries);
+                for (String pdfEntry : pdfs892) {
+                    verifyPdfEntry(zip, pdfEntry, appNum, FORM_892, MIN_SIZE_892_BYTES);
                 }
 
-                System.out.println("✓ Application " + appNum + ": "
-                        + form1449.size() + " × 1449 PDF(s), "
-                        + form892.size() + " × 892 PDF(s)  — all headers valid");
+                assertZipCountsMatchApi(appNum, pdfs1449.size(), pdfs892.size());
             }
-
-            printOcrSummaryTable(ocrSummaryRows);
-
         } catch (IOException e) {
             throw new RuntimeException("Failed to read zip for content validation: " + zipPath, e);
         }
     }
 
     /**
-     * Prints a table of the OCR title check across every PDF just verified, so
-     * it's easy to see at a glance that the same expected title text matched
-     * consistently across different application numbers.
+     * Structural checks only - no PDF parsing/rendering library or external OCR
+     * binary required, so this runs on any machine/CI runner unmodified:
+     * - starts with the %PDF- magic header (not corrupted/truncated)
+     * - is not suspiciously small (a near-empty file masquerading as a real form)
+     * - filename follows the workflow's naming convention
      */
-    private void printOcrSummaryTable(List<String[]> rows) {
-        if (rows.isEmpty()) return;
+    private void verifyPdfEntry(ZipFile zip, String pdfEntry, String appNum, String formType, long minSizeBytes) throws IOException {
+        ZipEntry entry = zip.getEntry(pdfEntry);
+        Assert.assertNotNull(entry, "Zip entry disappeared for " + pdfEntry);
 
-        int appCol = Math.max(11, rows.stream().mapToInt(r -> r[0].length()).max().orElse(0));
-        int formCol = Math.max(9, rows.stream().mapToInt(r -> r[1].length()).max().orElse(0));
-        int titleCol = Math.max(14, rows.stream().mapToInt(r -> r[2].length()).max().orElse(0));
+        assertPdfMagicHeader(zip, entry, pdfEntry);
 
-        String rowFormat = "  %-" + appCol + "s | %-" + formCol + "s | %-" + titleCol + "s | %s%n";
+        Assert.assertTrue(entry.getSize() >= minSizeBytes,
+                formType + " PDF is suspiciously small (" + entry.getSize() + " bytes): "
+                        + pdfEntry + " (expected >= " + minSizeBytes + ")");
 
-        System.out.println("──── OCR title verification summary (" + rows.size() + " PDF(s)) ────");
-        System.out.printf(rowFormat, "App Number", "Form Type", "Expected Title", "Match");
-        System.out.println("  " + "-".repeat(appCol + formCol + titleCol + 12));
-        for (String[] row : rows) {
-            System.out.printf(rowFormat, row[0], row[1], row[2], row[3]);
-        }
-    }
-
-    private void verifyPdfEntry(ZipFile zip, String pdfEntry, String appNum, String formType, long minSize,
-                                 List<String[]> ocrSummaryRows) throws IOException {
-        System.out.println("──── Verifying " + pdfEntry + " ────");
-
-        ZipEntry ze = zip.getEntry(pdfEntry);
-        Assert.assertNotNull(ze, "ZipEntry disappeared for " + pdfEntry);
-
-        // Non-zero size
-        Assert.assertTrue(ze.getSize() > 0, formType + " PDF has zero size: " + pdfEntry);
-        System.out.println("  ✓ Non-zero size: " + ze.getSize() + " bytes");
-
-        // Naming convention: {appNum}_{formType}_{dd-MMM-yyyy}[_N].pdf
         String fileName = Path.of(pdfEntry).getFileName().toString();
-        Assert.assertTrue(fileName.startsWith(appNum + "_" + formType + "_"),
-                formType + " PDF filename does not follow naming convention: " + fileName);
-        Assert.assertTrue(fileName.matches(
-                        appNum + "_" + formType + "_\\d{2}-[A-Z][a-z]{2}-\\d{4}(_\\d+)?\\.pdf"),
-                formType + " PDF filename date pattern invalid: " + fileName
+        Assert.assertTrue(fileName.matches(appNum + "_" + formType + FILENAME_PATTERN_SUFFIX),
+                formType + " PDF filename does not follow naming convention: " + fileName
                         + " (expected {appNum}_" + formType + "_{dd-MMM-yyyy}[_N].pdf)");
-        System.out.println("  ✓ Filename matches naming convention: " + fileName);
 
-        assertPdfMagicHeader(zip, ze, pdfEntry);
-
-        Assert.assertTrue(ze.getSize() >= minSize,
-                formType + " PDF is suspiciously small (" + ze.getSize() + " bytes): "
-                        + pdfEntry + " (expected >= " + minSize + ")");
-        System.out.println("  ✓ Size >= minimum threshold for " + formType
-                + " (" + ze.getSize() + " >= " + minSize + " bytes)");
-
-        assertPdfStructurallyValidAndNotBlank(zip, ze, pdfEntry);
-
-        // Content-level check: confirm the form title actually printed on the
-        // page matches the folder (1449 vs 892) it was filed under, independent
-        // of the application number (see EXPECTED_TITLE_* comment for why).
-        assertPdfFormTitleViaOcr(zip, ze, pdfEntry, formType, appNum, ocrSummaryRows);
+        Log.pass("Verified {} - header, size ({} bytes), and filename convention all valid", pdfEntry, entry.getSize());
     }
 
-    private void assertPdfMagicHeader(ZipFile zip, ZipEntry ze, String label) throws IOException {
-        try (java.io.InputStream is = zip.getInputStream(ze)) {
+    private void assertPdfMagicHeader(ZipFile zip, ZipEntry entry, String label) throws IOException {
+        try (InputStream is = zip.getInputStream(entry)) {
             byte[] header = new byte[5];
             int read = is.read(header);
             Assert.assertEquals(read, 5, "Could not read 5-byte header from " + label);
-            String magic = new String(header, java.nio.charset.StandardCharsets.US_ASCII);
+            String magic = new String(header, StandardCharsets.US_ASCII);
             Assert.assertEquals(magic, "%PDF-",
                     "File does not start with %PDF- header (got '" + magic + "'): " + label);
         }
-        System.out.println("  ✓ PDF magic header valid (%PDF-)");
-    }
-
-    private void assertPdfStructurallyValidAndNotBlank(ZipFile zip, ZipEntry ze, String label) throws IOException {
-        try (java.io.InputStream is = zip.getInputStream(ze);
-             PDDocument document = PDDocument.load(is)) {
-
-            Assert.assertFalse(document.isEncrypted(), "PDF is unexpectedly encrypted: " + label);
-            System.out.println("  ✓ Not encrypted");
-
-            int pageCount = document.getNumberOfPages();
-            Assert.assertTrue(pageCount > 0, "PDF has no pages: " + label);
-            System.out.println("  ✓ PDFBox parsed successfully: " + pageCount + " page(s)");
-
-            BufferedImage image = new PDFRenderer(document).renderImageWithDPI(0, 72, ImageType.GRAY);
-            int width = image.getWidth();
-            int height = image.getHeight();
-
-            long nonWhitePixels = 0;
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    if (image.getRaster().getSample(x, y, 0) < 250) {
-                        nonWhitePixels++;
-                    }
-                }
-            }
-            double nonWhiteRatio = (double) nonWhitePixels / ((long) width * height);
-
-            Assert.assertTrue(nonWhiteRatio > 0.001,
-                    String.format("Page 1 of PDF appears blank (%.4f%% non-white pixels): %s",
-                            nonWhiteRatio * 100, label));
-            System.out.println(String.format("  ✓ Page 1 not blank (%.2f%% non-white pixels)", nonWhiteRatio * 100));
-        }
     }
 
     /**
-     * OCRs page 1 and asserts the standard USPTO form title for {@code formType}
-     * ("1449" or "892") is present. Works for any application number, since it
-     * only checks for the fixed title text, not the (OCR-unreliable) app number.
+     * The zip and the API are two independent views of the same USPTO data - if the
+     * counts diverge, either the download is incomplete/stale or the API is, so this
+     * is treated as a hard failure rather than a warning.
      * <p>
-     * Uses a fuzzy/tolerant match (normalized text, small edit-distance
-     * allowance) rather than an exact substring check, since OCR output on a
-     * scanned document is never perfectly clean.
+     * Fetches both form counts in a single API call (see countDocumentsByType) and
+     * logs one summary line per application instead of one per form code.
      */
-    private void assertPdfFormTitleViaOcr(ZipFile zip, ZipEntry ze, String label, String formType,
-                                           String appNum, List<String[]> ocrSummaryRows) throws IOException {
-        String expectedTitle = formType.equals("1449") ? EXPECTED_TITLE_1449 : EXPECTED_TITLE_892;
+    private void assertZipCountsMatchApi(String appNum, int zip1449Count, int zip892Count) {
+        Map<String, Integer> apiCounts = usptoApi().countDocumentsByType(appNum, FORM_1449, FORM_892);
+        int api1449Count = apiCounts.get(FORM_1449);
+        int api892Count = apiCounts.get(FORM_892);
 
-        try (java.io.InputStream is = zip.getInputStream(ze);
-             PDDocument document = PDDocument.load(is)) {
+        Log.info("Application {}: number of {} in zip is {} and {} in zip is {}",
+                appNum, FORM_1449, zip1449Count, FORM_892, zip892Count);
+        Log.info("Application {}: number of {} in API is {} and {} in API is {}",
+                appNum, FORM_1449, api1449Count, FORM_892, api892Count);
 
-            BufferedImage image = new PDFRenderer(document).renderImageWithDPI(0, 300, ImageType.GRAY);
-            String rawOcrText = runTesseractCli(image, label);
+        Assert.assertEquals(zip1449Count, api1449Count,
+                "Application " + appNum + ": " + FORM_1449 + " PDF count mismatch - zip contained "
+                        + zip1449Count + " but API reports " + api1449Count);
+        Assert.assertEquals(zip892Count, api892Count,
+                "Application " + appNum + ": " + FORM_892 + " PDF count mismatch - zip contained "
+                        + zip892Count + " but API reports " + api892Count);
 
-            String normalizedText = normalizeForOcrMatch(rawOcrText);
-            String normalizedExpected = normalizeForOcrMatch(expectedTitle);
+        Log.pass("Application {}: zip and API counts match - {}: {}, {}: {}",
+                appNum, FORM_1449, zip1449Count, FORM_892, zip892Count);
+    }
 
-            boolean titleFound = containsFuzzy(normalizedText, normalizedExpected, 0.15);
+    private WebElement focusAndClearQueryBox() {
+        WebElement input = new WebDriverWait(driver, UI_TIMEOUT)
+                .until(ExpectedConditions.elementToBeClickable(QUERY_INPUT));
+        input.click();
+        input.sendKeys(Keys.chord(selectAllModifier(), "a"), Keys.BACK_SPACE);
+        return input;
+    }
 
-            ocrSummaryRows.add(new String[] { appNum, formType, expectedTitle, titleFound ? "✓ matched" : "✗ NOT FOUND" });
-
-            Assert.assertTrue(titleFound,
-                    "OCR did not find expected " + formType + " form title (\"" + expectedTitle
-                            + "\") on page 1 of " + label
-                            + "\n  OCR text (normalized): " + normalizedText);
-            System.out.println("  ✓ OCR confirms " + formType + " form title present: \"" + expectedTitle + "\"");
-        }
+    private Keys selectAllModifier() {
+        Platform platform = (driver instanceof HasCapabilities)
+                ? ((HasCapabilities) driver).getCapabilities().getPlatformName()
+                : Platform.getCurrent();
+        return (platform != null && platform.is(Platform.MAC)) ? Keys.COMMAND : Keys.CONTROL;
     }
 
     /**
-     * Runs OCR by shelling out to the {@code tesseract} CLI binary rather than
-     * using tess4j's JNA bindings: on this environment those bindings failed to
-     * load (a version mismatch between lept4j's expected native symbol set and
-     * the system's installed liblept), while the CLI binary itself works fine.
-     * Invoking it directly avoids that whole class of native-binding fragility.
+     * True if the element becomes visible within the timeout; false instead of throwing.
      */
-    private String runTesseractCli(BufferedImage image, String label) throws IOException {
-        java.io.File tempImage = java.io.File.createTempFile("ocr-page-", ".png");
+    private boolean isVisibleWithin(By locator, Duration timeout) {
         try {
-            javax.imageio.ImageIO.write(image, "png", tempImage);
-
-            ProcessBuilder pb = new ProcessBuilder("tesseract", tempImage.getAbsolutePath(), "stdout", "--psm", "6");
-            pb.redirectErrorStream(false);
-            Process process = pb.start();
-
-            String stdout = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            String stderr = new String(process.getErrorStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-
-            int exitCode;
-            try {
-                exitCode = process.waitFor();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Interrupted while running tesseract for " + label, e);
-            }
-
-            if (exitCode != 0) {
-                throw new RuntimeException("tesseract CLI exited with code " + exitCode + " for " + label + ": " + stderr);
-            }
-            return stdout;
-        } finally {
-            tempImage.delete();
+            new WebDriverWait(driver, timeout)
+                    .until(ExpectedConditions.visibilityOfElementLocated(locator));
+            return true;
+        } catch (TimeoutException e) {
+            return false;
         }
     }
 
-    private static String normalizeForOcrMatch(String s) {
-        return s.toUpperCase(java.util.Locale.ROOT)
-                .replaceAll("[^A-Z0-9 ]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
+    private void assertRequestCompleted() {
+        Assert.assertTrue(waitVisible(COMPLETION_MESSAGE).isDisplayed(),
+                "Completion message ('...has been completed') never appeared");
+        Assert.assertTrue(waitVisible(REQUEST_ID_MESSAGE).isDisplayed(),
+                "Request ID message never appeared");
+
+        // The send/stop icons swap in the same slot, so "stop is gone" == "generation done".
+        // Waiting (rather than checking instantaneously) protects against the UI rendering
+        // the completion text a beat before it swaps the icon back.
+        boolean stillGenerating = !new WebDriverWait(driver, UI_TIMEOUT).until(ExpectedConditions.invisibilityOfElementLocated(STOP_BUTTON));
+        Assert.assertFalse(stillGenerating,
+                "Stop button is still present - the request has not finished generating");
+
+        Log.pass("Request completed (completion message, request ID, generation finished)");
     }
 
-    /**
-     * True if {@code needle} appears in {@code haystack} either exactly, or
-     * within {@code maxErrorRatio} character edit-distance in some window of
-     * {@code haystack} the same length as {@code needle} — tolerates the kind
-     * of noise OCR introduces (misread characters, minor spacing drift).
-     */
-    private static boolean containsFuzzy(String haystack, String needle, double maxErrorRatio) {
-        if (needle.isEmpty()) return true;
-        if (haystack.contains(needle)) return true;
-        if (haystack.length() < needle.length()) return false;
-
-        int windowLen = needle.length();
-        int maxAllowedDistance = (int) Math.floor(windowLen * maxErrorRatio);
-
-        for (int start = 0; start <= haystack.length() - windowLen; start++) {
-            String window = haystack.substring(start, start + windowLen);
-            if (levenshteinDistance(window, needle) <= maxAllowedDistance) {
-                return true;
-            }
+    private WebElement waitForNewDownloadLink(String previousHref) {
+        long start = System.currentTimeMillis();
+        try {
+            WebElement link = new WebDriverWait(driver, BACKEND_TIMEOUT).until(newDownloadLinkAppears(previousHref));
+            Log.info("Backend produced a new zip in {} ms", System.currentTimeMillis() - start);
+            return link;
+        } catch (TimeoutException e) {
+            throw new TimeoutException(
+                    "Timed out after " + BACKEND_TIMEOUT.getSeconds()
+                            + "s waiting for a NEW download link. Still showing the previous one: "
+                            + stripQueryString(previousHref), e);
         }
-        return false;
     }
 
-    private static int levenshteinDistance(String a, String b) {
-        int[] prev = new int[b.length() + 1];
-        int[] curr = new int[b.length() + 1];
-        for (int j = 0; j <= b.length(); j++) prev[j] = j;
-
-        for (int i = 1; i <= a.length(); i++) {
-            curr[0] = i;
-            for (int j = 1; j <= b.length(); j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+    private static ExpectedCondition<WebElement> newDownloadLinkAppears(String previousHref) {
+        return new ExpectedCondition<WebElement>() {
+            @Override
+            public WebElement apply(WebDriver d) {
+                List<WebElement> links = d.findElements(ALL_DOWNLOAD_LINKS);
+                if (links.isEmpty()) {
+                    return null;
+                }
+                WebElement newest = links.get(links.size() - 1);
+                String candidate = hrefOf(newest);
+                return (candidate != null && !candidate.equals(previousHref)) ? newest : null;
             }
-            int[] tmp = prev;
-            prev = curr;
-            curr = tmp;
-        }
-        return prev[b.length()];
+
+            @Override
+            public String toString() {
+                return "a 1449 .zip download link with an href different from "
+                        + stripQueryString(previousHref);
+            }
+        };
     }
 
-    private static String stripQueryString(String url) {
-        if (url == null) return null;
-        int idx = url.indexOf('?');
-        return idx == -1 ? url : url.substring(0, idx);
+    private void logDownloadLinkCandidates() {
+        List<WebElement> links = driver.findElements(ALL_DOWNLOAD_LINKS);
+        Log.debug("Download links currently in DOM: {}", links.size());
+        for (WebElement el : links) {
+            Log.debug("    candidate: {}", stripQueryString(hrefOf(el)));
+        }
+    }
+
+    private Path awaitAndValidateDownloadedFile(Instant beforeClick) {
+        try {
+            Path downloadDir = OutputFileWorkflowManager.resolveIncomingDownloadDirectory(ConfigReader.loadConfig());
+
+            Path file = waitForDownloadedFile(downloadDir, FORM_1449, DOWNLOAD_TIMEOUT_SECONDS, beforeClick);
+
+            Assert.assertNotNull(file, "Download did not complete: no file containing '" + FORM_1449 + "' modified after " + beforeClick + " appeared in " + downloadDir + " within " + DOWNLOAD_TIMEOUT_SECONDS + "s");
+
+            assertValidNonEmptyZip(file);
+            Log.pass("Downloaded {} ({} KB)", file.getFileName(), sizeInKb(file));
+            return file;
+
+        } catch (InterruptedException e) {
+            // Catching InterruptedException CLEARS the interrupt flag - restore it so
+            // whoever is shutting this thread down upstream still sees the cancellation.
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for the download", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed while checking for the downloaded file", e);
+        }
+    }
+
+    private Path waitForDownloadedFile(Path downloadDir, String filenameContains,
+                                       int timeoutSeconds, Instant after)
+            throws InterruptedException, IOException {
+
+        Instant deadline = Instant.now().plusSeconds(timeoutSeconds);
+
+        while (Instant.now().isBefore(deadline)) {
+            Path candidate;
+            // Files.list holds an OPEN OS directory handle - it must be closed,
+            // or a long-running suite exhausts its file descriptors.
+            try (Stream<Path> files = Files.list(downloadDir)) {
+                candidate = files
+                        .filter(Files::isRegularFile)
+                        .filter(idsMenuPage::isNotBrowserTempFile)
+                        .filter(path -> matchesName(path, filenameContains))
+                        .filter(path -> isModifiedAfter(path, after))
+                        .max(Comparator.comparingLong(path -> path.toFile().lastModified()))
+                        .orElse(null);
+            }
+
+            if (candidate != null) {
+                return candidate;
+            }
+            Thread.sleep(DOWNLOAD_POLL_MILLIS);
+        }
+        return null;
+    }
+
+    private static boolean isNotBrowserTempFile(Path path) {
+        String name = path.getFileName().toString().toLowerCase();
+        return !name.endsWith(".crdownload")   // Chrome partial
+                && !name.endsWith(".part")      // Firefox partial
+                && !name.endsWith(".tmp")
+                && !name.startsWith(".")        // .DS_Store etc.
+                && !name.startsWith("~$")       // Office lock files
+                && !name.contains("chrome")
+                && !name.contains("google")
+                && !name.contains("edge")
+                && !name.contains("chromium");
+    }
+
+    private static boolean matchesName(Path path, String filenameContains) {
+        return filenameContains == null
+                || filenameContains.isBlank()
+                || path.getFileName().toString().contains(filenameContains);
+    }
+
+    private static boolean isModifiedAfter(Path path, Instant after) {
+        return Instant.ofEpochMilli(path.toFile().lastModified()).isAfter(after);
     }
 
     private void assertValidNonEmptyZip(Path file) throws IOException {
         Assert.assertTrue(Files.size(file) > 0, "Downloaded file is empty: " + file);
         try (ZipFile zip = new ZipFile(file.toFile())) {
-            Assert.assertTrue(zip.entries().hasMoreElements(), "Downloaded zip has no entries: " + file);
+            Assert.assertTrue(zip.entries().hasMoreElements(),
+                    "Downloaded zip has no entries: " + file);
         }
     }
 
-    private static List<String> concat(List<String> a, List<String> b) {
-        List<String> combined = new ArrayList<>(a);
-        combined.addAll(b);
-        return combined;
+    private List<String> collectEntryNames(ZipFile zip) {
+        List<String> names = new ArrayList<>();
+        Enumeration<? extends ZipEntry> entries = zip.entries();
+        while (entries.hasMoreElements()) {
+            names.add(entries.nextElement().getName());
+        }
+        return names;
+    }
+
+    private static void assertOnlyPdfFiles(List<String> entryNames) {
+        for (String entry : entryNames) {
+            if (entry.endsWith("/")) {
+                continue; // directory entry
+            }
+            Assert.assertTrue(entry.toLowerCase().endsWith(PDF_SUFFIX),
+                    "Unexpected non-PDF file found in zip: " + entry);
+        }
+    }
+
+    private static List<String> entriesUnderFolder(List<String> entryNames, String appNum) {
+        return entryNames.stream().filter(e -> e.startsWith(appNum + "/")).collect(Collectors.toList());
+    }
+
+    private static List<String> pdfsInSubfolder(List<String> appEntries, String subfolder) {
+        String marker = "/" + subfolder + "/";
+        return appEntries.stream().filter(e -> e.contains(marker) && e.toLowerCase().endsWith(PDF_SUFFIX)).collect(Collectors.toList());
+    }
+
+    private static String hrefOf(WebElement element) {
+        return element.getAttribute("href");
+    }
+
+    private static String stripQueryString(String url) {
+        if (url == null) {
+            return null;
+        }
+        int idx = url.indexOf('?');
+        return idx == -1 ? url : url.substring(0, idx);
+    }
+
+    private static long sizeInKb(Path file) {
+        try {
+            return Files.size(file) / 1024;
+        } catch (IOException e) {
+            return -1;
+        }
     }
 }

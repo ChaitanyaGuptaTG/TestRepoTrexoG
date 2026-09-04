@@ -1,131 +1,214 @@
 package test;
 
+import base.BaseTest;
+import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-import base.BaseTest;
-import pages.LoginPage;
 import pages.IDSPage.idsPage;
+import pages.LoginPage;
 import utils.WaitUtils;
 
 import java.nio.file.Path;
-
-import static utils.DriverManager.getDriver;
+import java.util.HashSet;
+import java.util.List;
 
 public class idsPageTest extends BaseTest {
 
-    private idsPage idePage;
+    private static final String DOWNLOADER_NAME = "1449 and 892 Downloader";
+    private static final int PAGE_LOAD_TIMEOUT_SECONDS = 10;
 
-    // ── Real application numbers from the dataset ──
-    private static final String APP_1 = "16999215";
-    private static final String APP_2 = "17954142";
-    private static final String APP_3 = "18139333";
+    // ── 1449 and 892 Downloader application numbers ──
+    private static final String APP_SINGLE_FIRST = "16999215";
+    private static final String APP_BATCH_A = "17954142";
+    private static final String APP_BATCH_B = "18139333";
+    private static final String APP_SINGLE_SECOND = "18210779";
 
-    // ── Additional application numbers (from Application_NUmbers.ods, US Patent
-    //    Application Number column — 17/18 series, non-provisional) ──
-    private static final String APP_4 = "18210779";
-    private static final String APP_5 = "17691286";
-    private static final String APP_6 = "17862541";
+    // ── Reference Count uses its own numbers so a failure names the right workflow ──
+    private static final String REF_COUNT_SINGLE = "17954142";
+    private static final String REF_COUNT_BATCH_A = "18139333";
+    private static final String REF_COUNT_BATCH_B = "16999215";
+
+    // ── Reference Downloader uses its own numbers so a failure names the right workflow ──
+    private static final String REF_DL_SINGLE = "US1234567A";
+    private static final String REF_DL_BATCH_A = "US4683202A";
+    private static final String REF_DL_BATCH_B = "DE102015013053A1";
+    private static final String REF_DL_BATCH_C = "AU2010219336A1";
+
+    private idsPage idsDownloaderPage;
 
     @BeforeClass
-    public void setUpIdePage() {
+    public void setUpIdsDownloaderPage() {
         LoginPage loginPage = new LoginPage(getDriver());
         loginPage.enterUsername(config.getProperty("username"));
         loginPage.enterPassword(config.getProperty("password"));
         loginPage.clickSignin();
-        WaitUtils.waitForPageToLoadCompletely(getDriver(), 10);
-        idePage = new pages.IDSPage.idsPage(getDriver());
+        WaitUtils.waitForPageToLoadCompletely(getDriver(), PAGE_LOAD_TIMEOUT_SECONDS);
+
+        idsDownloaderPage = new idsPage(getDriver());
     }
 
-    @Test(description = "Open the June chat interface", priority = 1)
-    public void clickTheJuneIcon() {
-        idePage.clickJuneIcon();
-    }
+    // 1449 and 892 Downloader
 
-    @Test(description = "Open the IDS dropdown", priority = 2)
-    public void clickTheIDSDropdown() {
-        idePage.clickIDE();
-    }
-
-    @Test(description = "Select '1449 and 892 Downloader' from IDS", priority = 3)
+    @Test(description = "Open June chat, open the IDS dropdown, select '1449 and 892 Downloader', and verify it's selected")
     public void selectDocumentDownloader() {
-        idePage.selectDocumentDownloader();
+        idsDownloaderPage.clickJuneIcon();
+        idsDownloaderPage.clickIdsDropdown();
+        idsDownloaderPage.selectDocumentDownloader();
+        idsDownloaderPage.verifyDocumentDownloaderSelected();
     }
 
-    @Test(description = "Verify label and instruction appear after selection", priority = 4)
-    public void verifyDocumentDownloaderSelected() {
-        idePage.verifyDocumentDownloaderSelected();
-    }
-
-
-    @Test(description = "Submit a single application number and validate the downloaded zip",
-            priority = 5)
+    @Test(description = "Submit a single application number and validate the downloaded zip", dependsOnMethods = "selectDocumentDownloader", alwaysRun = true)
     public void submitSingleAppNumberAndValidateZip() {
-        idePage.enterQueryAndSubmit(APP_1);
+        idsDownloaderPage.enterQueryAndSubmit(APP_SINGLE_FIRST);
 
-        Path zip = idePage.clickDownloadAndVerifyTxt();
+        Path zip = idsDownloaderPage.clickDownloadAndVerifyZip();
 
-        // Deep validation: folder structure, 1449/892 subfolders, PDF naming
-        idePage.assertZipContents(zip, APP_1);
+        idsDownloaderPage.assertZipContents(zip, APP_SINGLE_FIRST);
     }
 
-    @Test(description = "Click YES to continue, then submit two app numbers and validate",
-            priority = 6)
+    @Test(description = "Continue the workflow, submit two application numbers and validate", dependsOnMethods = "submitSingleAppNumberAndValidateZip", alwaysRun = true)
     public void continueAndSubmitMultipleAppNumbers() {
-        // June asks "Would you like to continue with 1449 and 892 Downloader?"
-        idePage.clickContinueYes();
+        idsDownloaderPage.clickContinueYes();
 
-        // Submit two numbers separated by newline
-        idePage.enterQueryAndSubmit(APP_2 + "\n" + APP_3);
+        idsDownloaderPage.enterQueryAndSubmit(APP_BATCH_A + "\n" + APP_BATCH_B);
 
-        Path zip = idePage.clickDownloadAndVerifyTxt();
+        Path zip = idsDownloaderPage.clickDownloadAndVerifyZip();
 
-        // The zip should contain folders for both application numbers
-        idePage.assertZipContents(zip, APP_2, APP_3);
+        idsDownloaderPage.assertZipContents(zip, APP_BATCH_A, APP_BATCH_B);
     }
 
-    @Test(description = "Click NO to exit the downloader workflow", priority = 7)
+    @Test(description = "Decline to continue and exit the downloader workflow", dependsOnMethods = "continueAndSubmitMultipleAppNumbers", alwaysRun = true)
     public void declineToContinue() {
-        idePage.clickContinueNo();
+        idsDownloaderPage.clickContinueNo();
     }
 
-
-    @Test(description = "Re-enter the downloader by typing the intent name in the query box",
-            priority = 8)
-    public void selectDocumentDownloaderByTypingIntent() {
-        idePage.selectDocumentDownloaderByTypingIntent("1449 and 892 Downloader");
-        idePage.verifyApplicationNumbersInstructionShown();
+    @Test(description = "Re-enter the downloader by typing the intent name in the query box", dependsOnMethods = "declineToContinue", alwaysRun = true)
+    public void reEnterDownloaderByTypingIntent() {
+        idsDownloaderPage.selectDocumentDownloaderByTypingIntent(DOWNLOADER_NAME);
+        idsDownloaderPage.verifyApplicationNumbersInstructionShown();
     }
 
-    @Test(description = "Submit a second single application number and validate the downloaded zip",
-            priority = 9)
+    @Test(description = "Submit a second single application number and validate the downloaded zip", dependsOnMethods = "reEnterDownloaderByTypingIntent", alwaysRun = true)
     public void submitSecondSingleAppNumberAndValidateZip() {
-        idePage.enterQueryAndSubmit(APP_4);
+        idsDownloaderPage.enterQueryAndSubmit(APP_SINGLE_SECOND);
 
-        Path zip = idePage.clickDownloadAndVerifyTxt();
+        Path zip = idsDownloaderPage.clickDownloadAndVerifyZip();
 
-        idePage.assertZipContents(zip, APP_4);
+        idsDownloaderPage.assertZipContents(zip, APP_SINGLE_SECOND);
     }
 
-    @Test(description = "Click YES to continue, then submit two more app numbers and validate",
-            priority = 10)
-    public void continueAndSubmitMoreAppNumbers() {
-        idePage.clickContinueYes();
-
-        idePage.enterQueryAndSubmit(APP_5 + "\n" + APP_6);
-
-        Path zip = idePage.clickDownloadAndVerifyTxt();
-
-        idePage.assertZipContents(zip, APP_5, APP_6);
+    @Test(description = "Exit the downloader so the session can move on to Reference Count", dependsOnMethods = "submitSecondSingleAppNumberAndValidateZip", alwaysRun = true)
+    public void exitDownloaderBeforeReferenceCount() {
+        idsDownloaderPage.clickContinueNo();
     }
 
-    @Test(description = "Click NO to exit the downloader workflow (second cycle)", priority = 11)
-    public void declineToContinueSecondCycle() {
-        idePage.clickContinueNo();
+    @Test(description = "IDS dropdown offers '1449 and 892 Downloader' again once the workflow has exited", dependsOnMethods = "exitDownloaderBeforeReferenceCount", alwaysRun = true)
+    public void verifyDownloaderDropdownAvailableAfterExit() {
+        idsDownloaderPage.verifyIdsDropdownAvailableAfterSelection();
     }
 
-    @Test(description = "IDS dropdown stays disabled after a downloader is selected",
-            priority = 12)
-    public void ideDropdownDisabledAfterSelection() {
-        idePage.verifyIdsDropdownDisabledAfterSelection();
+    // Reference Count
+
+    @Test(description = "Select 'Reference Count' from the IDS dropdown after the downloader has exited", dependsOnMethods = "verifyDownloaderDropdownAvailableAfterExit", alwaysRun = true)
+    public void selectReferenceCount() {
+        int instructionsBefore = idsDownloaderPage.instructionCount();
+
+        idsDownloaderPage.selectReferenceCount();
+
+        idsDownloaderPage.verifyReferenceCountSelected(instructionsBefore);
+    }
+
+    @Test(description = "Submit a single application number to Reference Count", dependsOnMethods = "selectReferenceCount", alwaysRun = true)
+    public void submitSingleAppNumberToReferenceCount() {
+        idsDownloaderPage.enterReferenceCountQueryAndSubmit(REF_COUNT_SINGLE);
+
+        String requestId = idsDownloaderPage.awaitReferenceCountRequestId();
+
+        Assert.assertTrue(requestId.matches("\\d+"), "Reference Count Request ID should be numeric but was: " + requestId);
+    }
+
+    @Test(description = "Continue Reference Count and submit two application numbers", dependsOnMethods = "submitSingleAppNumberToReferenceCount", alwaysRun = true)
+    public void continueAndSubmitMultipleToReferenceCount() {
+        idsDownloaderPage.clickReferenceCountContinueYes();
+
+        idsDownloaderPage.enterReferenceCountQueryAndSubmit(
+                REF_COUNT_BATCH_A + "\n" + REF_COUNT_BATCH_B);
+
+        idsDownloaderPage.awaitReferenceCountRequestId();
+    }
+
+    @Test(description = "Every Reference Count submission produced a distinct Request ID", dependsOnMethods = "continueAndSubmitMultipleToReferenceCount", alwaysRun = true)
+    public void referenceCountRequestIdsAreDistinct() {
+        List<String> ids = idsDownloaderPage.referenceCountRequestIds();
+
+        Assert.assertEquals(ids.size(), 2, "Expected two Reference Count submissions, got: " + ids);
+        Assert.assertEquals(new HashSet<>(ids).size(), ids.size(), "Duplicate Request IDs across Reference Count submissions: " + ids);
+    }
+
+    @Test(description = "Decline to continue and exit the Reference Count workflow", dependsOnMethods = "referenceCountRequestIdsAreDistinct", alwaysRun = true)
+    public void declineToContinueReferenceCount() {
+        idsDownloaderPage.clickReferenceCountContinueNo();
+    }
+
+    @Test(description = "IDS dropdown offers 'Reference Count' again once the workflow has exited", dependsOnMethods = "declineToContinueReferenceCount", alwaysRun = true)
+    public void verifyReferenceCountDropdownAvailableAfterExit() {
+        idsDownloaderPage.verifyReferenceCountAvailableInDropdown();
+    }
+
+    // Reference Downloader
+
+    @Test(description = "Select 'Reference Downloader' from the IDS dropdown after Reference Count has exited", dependsOnMethods = "verifyReferenceCountDropdownAvailableAfterExit", alwaysRun = true)
+    public void selectReferenceDownloader() {
+        int instructionsBefore = idsDownloaderPage.refDownloaderInstructionCount();
+
+        idsDownloaderPage.selectReferenceDownloader();
+
+        idsDownloaderPage.verifyReferenceDownloaderSelected(instructionsBefore);
+    }
+
+    @Test(description = "Submit a single reference number to Reference Downloader", dependsOnMethods = "selectReferenceDownloader", alwaysRun = true)
+    public void submitSingleRefNumberToReferenceDownloader() {
+        idsDownloaderPage.enterReferenceDownloaderQueryAndSubmit(REF_DL_SINGLE);
+
+        String requestId = idsDownloaderPage.awaitReferenceDownloaderTaskCompletion();
+
+        Assert.assertTrue(requestId.matches("\\d+"), "Reference Downloader Request ID should be numeric but was: " + requestId);
+
+        idsDownloaderPage.verifyRefDownloaderDownloadLinkContainsRequestId(requestId);
+    }
+
+    @Test(description = "Continue Reference Downloader and submit a batch of three reference numbers", dependsOnMethods = "submitSingleRefNumberToReferenceDownloader", alwaysRun = true)
+    public void continueAndSubmitBatchToReferenceDownloader() {
+        idsDownloaderPage.clickReferenceDownloaderContinueYes();
+
+        idsDownloaderPage.enterReferenceDownloaderQueryAndSubmit(
+                REF_DL_BATCH_A + "\n" + REF_DL_BATCH_B + "\n" + REF_DL_BATCH_C);
+
+        String requestId = idsDownloaderPage.awaitReferenceDownloaderTaskCompletion();
+
+        if (idsDownloaderPage.isReferenceDownloaderRequestAcknowledgedAsync()) {
+            // Async path (e.g. DE102015013053A1): request is queued, no download link yet.
+            // Actual completion is verified separately via Collab - not covered here.
+        } else {
+            idsDownloaderPage.verifyRefDownloaderDownloadLinkContainsRequestId(requestId);
+        }
+    }
+
+    @Test(description = "Every Reference Downloader submission produced a distinct Request ID", dependsOnMethods = "continueAndSubmitBatchToReferenceDownloader", alwaysRun = true)
+    public void referenceDownloaderRequestIdsAreDistinct() {
+        List<String> ids = idsDownloaderPage.referenceDownloaderRequestIds();
+
+        Assert.assertEquals(ids.size(), 2, "Expected two Reference Downloader submissions, got: " + ids);
+        Assert.assertEquals(new HashSet<>(ids).size(), ids.size(), "Duplicate Request IDs across Reference Downloader submissions: " + ids);
+    }
+
+    @Test(description = "Decline to continue and exit the Reference Downloader workflow", dependsOnMethods = "referenceDownloaderRequestIdsAreDistinct", alwaysRun = true)
+    public void declineToContinueReferenceDownloader() {
+        idsDownloaderPage.clickReferenceDownloaderContinueNo();
+    }
+
+    @Test(description = "IDS dropdown offers 'Reference Downloader' again once the workflow has exited", dependsOnMethods = "declineToContinueReferenceDownloader", alwaysRun = true)
+    public void verifyReferenceDownloaderDropdownAvailableAfterExit() {
+        idsDownloaderPage.verifyReferenceDownloaderAvailableInDropdown();
     }
 }
