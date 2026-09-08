@@ -159,9 +159,10 @@ public class idsPageTest extends BaseTest {
 
     @Test(description = "Select 'Reference Downloader' from the IDS dropdown after Reference Count has exited", dependsOnMethods = "verifyReferenceCountDropdownAvailableAfterExit", alwaysRun = true)
     public void selectReferenceDownloader() {
+        idsDownloaderPage.selectReferenceDownloader();
         int instructionsBefore = idsDownloaderPage.refDownloaderInstructionCount();
 
-        idsDownloaderPage.selectReferenceDownloader();
+//        idsDownloaderPage.selectReferenceDownloader();
 
         idsDownloaderPage.verifyReferenceDownloaderSelected(instructionsBefore);
     }
@@ -210,5 +211,51 @@ public class idsPageTest extends BaseTest {
     @Test(description = "IDS dropdown offers 'Reference Downloader' again once the workflow has exited", dependsOnMethods = "declineToContinueReferenceDownloader", alwaysRun = true)
     public void verifyReferenceDownloaderDropdownAvailableAfterExit() {
         idsDownloaderPage.verifyReferenceDownloaderAvailableInDropdown();
+    }
+
+    // Reference Extractor
+
+    @Test(description = "Select 'Reference Extractor' from the IDS dropdown after Reference Downloader has exited", dependsOnMethods = "verifyReferenceDownloaderDropdownAvailableAfterExit", alwaysRun = true)
+    public void selectReferenceExtractor() {
+        idsDownloaderPage.selectReferenceExtractor();
+        idsDownloaderPage.verifyReferenceExtractorSelected();
+    }
+
+    @Test(description = "Upload a PDF to Reference Extractor and submit", dependsOnMethods = "selectReferenceExtractor", alwaysRun = true)
+    public void uploadAndSubmitToReferenceExtractor() {
+        idsDownloaderPage.uploadReferenceExtractorSampleFile();
+        idsDownloaderPage.clickReferenceExtractorSubmitButton();
+
+        String requestId = idsDownloaderPage.awaitReferenceExtractorRequestId();
+
+        Assert.assertTrue(requestId.matches("\\d+"), "Reference Extractor Request ID should be numeric but was: " + requestId);
+    }
+
+    @Test(description = "Continue Reference Extractor and submit a second file", dependsOnMethods = "uploadAndSubmitToReferenceExtractor", alwaysRun = true)
+    public void continueAndSubmitSecondFileToReferenceExtractor() {
+        idsDownloaderPage.clickReferenceExtractorContinueYes();
+
+        idsDownloaderPage.uploadReferenceExtractorSampleFile();
+        idsDownloaderPage.clickReferenceExtractorSubmitButton();
+
+        idsDownloaderPage.awaitReferenceExtractorRequestId();
+    }
+
+    @Test(description = "Every Reference Extractor submission produced a distinct Request ID", dependsOnMethods = "continueAndSubmitSecondFileToReferenceExtractor", alwaysRun = true)
+    public void referenceExtractorRequestIdsAreDistinct() {
+        List<String> ids = idsDownloaderPage.referenceExtractorRequestIds();
+
+        Assert.assertEquals(ids.size(), 2, "Expected two Reference Extractor submissions, got: " + ids);
+        Assert.assertEquals(new HashSet<>(ids).size(), ids.size(), "Duplicate Request IDs across Reference Extractor submissions: " + ids);
+    }
+
+    @Test(description = "Decline to continue and exit the Reference Extractor workflow", dependsOnMethods = "referenceExtractorRequestIdsAreDistinct", alwaysRun = true)
+    public void declineToContinueReferenceExtractor() {
+        idsDownloaderPage.clickReferenceExtractorContinueNo();
+    }
+
+    @Test(description = "IDS dropdown offers 'Reference Extractor' again once the workflow has exited", dependsOnMethods = "declineToContinueReferenceExtractor", alwaysRun = true)
+    public void verifyReferenceExtractorDropdownAvailableAfterExit() {
+        idsDownloaderPage.verifyReferenceExtractorAvailableInDropdown();
     }
 }

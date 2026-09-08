@@ -1,33 +1,32 @@
 package pages.IDSPage;
 
 import org.openqa.selenium.By;
-import org.openqa.selenium.HasCapabilities;
-import org.openqa.selenium.Keys;
-import org.openqa.selenium.Platform;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
 import pages.BasePage;
-import utils.ConfigReader;
+import pages.IDSPage.helpers.ContinueDialogHelper;
+import pages.IDSPage.helpers.IdsDropdownHelper;
+import pages.IDSPage.helpers.QueryInputHelper;
+import pages.IDSPage.helpers.StatusPagePoller;
 import utils.Log;
-import utils.OutputFileWorkflowManager;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
+/**
+ * Page object for the "Reference Count" IDS workflow. The mechanics shared
+ * with the other IDS workflows (dropdown, query box, continue dialog, the
+ * async status-page flow) live in {@code pages.IDSPage.helpers}; this class
+ * owns the workflow-specific locators and the submission-acknowledgement
+ * logic (sync vs. async outcome, request-ID tracking, the ack-retry policy).
+ */
 public class referenceCountMenuPage extends BasePage {
 
 
@@ -40,14 +39,11 @@ public class referenceCountMenuPage extends BasePage {
 
 
     private static final String WORKFLOW_NAME = "Reference Count";
-    private static final String QUERY_PLACEHOLDER = "Enter your query or select a task to get started";
     private static final String CANCELLED_TEXT = "Request cancelled.";
     private static final String INSTRUCTION_TEXT = "Please enter the application numbers separated by new line(s). (Maximum: 500)";
 
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("ID\\s*(\\d+)");
 
-
-    private static final By IDS_DROPDOWN = By.xpath("//div[@role='combobox' and .//span[text()='IDS']]");
 
     // "Corresponding RefCheck" is a separate, real IDS option (see FAQsPage/TutorialPage)
     // whose node text can also contain the substring "Reference Count" (e.g. via a
@@ -57,22 +53,16 @@ public class referenceCountMenuPage extends BasePage {
             "//li[@role='option' and contains(.,'" + WORKFLOW_NAME + "') and not(contains(.,'Corresponding RefCheck'))]");
 
 
-    // Anchored on this option's aria-label (a description unique to "Reference Count",
-    // e.g. not shared by "Corresponding RefCheck") rather than excluding <li> ancestors -
-    // the transcript bubble can itself sit under a <li> in the chat's message list, which
-    // made the ancestor exclusion also exclude the real bubble and time out.
-    private static final String REFERENCE_COUNT_ARIA_LABEL = "Count total cited references.";
-
+    // The transcript bubble is a plain <span>Reference Count</span> with no aria-label -
+    // the dropdown option is the only place that attribute lives, so anchoring on it (as an
+    // earlier revision did) could never match a real bubble and always timed out. By the
+    // time this is checked, selectReferenceCount() has already clicked the option and the
+    // dropdown has closed, so a plain text match is unambiguous.
     private static final By REFERENCE_COUNT_BUBBLE = By.xpath(
-            "(//span[@aria-label='" + REFERENCE_COUNT_ARIA_LABEL + "' and normalize-space()='" + WORKFLOW_NAME + "'])[last()]");
+            "(//span[normalize-space()='" + WORKFLOW_NAME + "'])[last()]");
 
 
     private static final By ALL_INSTRUCTIONS = By.xpath("//span[contains(text(),'" + INSTRUCTION_TEXT + "')]");
-
-    private static final By QUERY_INPUT = By.cssSelector("textarea[placeholder='" + QUERY_PLACEHOLDER + "']");
-
-    // SVG lives in its own XML namespace, so //svg does NOT work in XPath.
-    private static final By SUBMIT_BUTTON = By.xpath("//*[name()='svg' and @data-testid='SendOutlinedIcon']");
 
     private static final By STOP_BUTTON = By.xpath("//*[name()='svg' and @data-testid='StopCircleOutlinedIcon']");
 
@@ -93,39 +83,11 @@ public class referenceCountMenuPage extends BasePage {
     private static final By CANCELLED_MESSAGE = By.xpath("(//*[normalize-space(text())='" + CANCELLED_TEXT + "'])[last()]");
 
     // ── Status page (reached via the async "click here" link) ──────────────────
-    private static final String TASK_TYPE_LABEL = "Task Type:";
-    private static final String STATUS_LABEL = "Status:";
-    private static final String SUBTASK_LABEL = "Subtask:";
-    private static final String EXPECTED_TASK_TYPE = "IDS";
     private static final String EXPECTED_SUBTASK = "Reference Count";
-    private static final String STATUS_SUCCESS = "Success";
-    private static final String STATUS_PENDING = "Pending";
-
-    private static final Pattern STATUS_VALUE_PATTERN = Pattern.compile(Pattern.quote(STATUS_LABEL) + "\\s*(\\S+)");
-
-    private static final By BACK_TO_CHAT_LINK = By.xpath("//p[contains(.,'Back to IP Assistant Chat')]");
-
-    // Confirmed against the live DOM - MUI's Cached icon, not a "Refresh"-named one.
-    private static final By REFRESH_ICON = By.xpath("//*[name()='svg' and @data-testid='CachedIcon']");
-
-    // Confirmed against the live DOM - the per-row expand/collapse chevron.
-    private static final By ROW_EXPAND_CHEVRON = By.xpath(".//*[name()='svg' and @data-testid='KeyboardArrowDownOutlinedIcon']");
-
-    // Present on a row once its Status is "Success"; absent while "Pending".
-    private static final By ROW_DOWNLOAD_ICON = By.xpath(".//*[name()='svg' and @data-testid='FileDownloadOutlinedIcon']");
-
-    private static final By SEARCH_INPUT = By.cssSelector("input[placeholder='Search']");
 
     // ── Synchronous completion path: inline "Download" link inside the chat message ──
     private static final By COMPLETED_DOWNLOAD_LINK = By.xpath(
             "(//p[contains(.,'Request ID') and contains(.,'has been completed')]//a[normalize-space()='Download'])[last()]");
-
-    // How long to wait after the one refresh-and-recheck for a still-"Pending" row.
-    private static final long STATUS_POLL_INTERVAL_MILLIS = 5000L;
-
-    private static final int DOWNLOAD_TIMEOUT_SECONDS = 30;
-    private static final long DOWNLOAD_POLL_MILLIS = 1000L;
-    private static final long CLOCK_SKEW_SLACK_SECONDS = 1L;
 
     // ── Continue dialog: scoped by WORKFLOW NAME, because the downloader's dialog
     // ── is still sitting in this same transcript.
@@ -136,6 +98,12 @@ public class referenceCountMenuPage extends BasePage {
     private static final By CONTINUE_YES = By.xpath("(" + CONTINUE_ANCHOR + "/ancestor::div" + "//button[normalize-space()='YES' or normalize-space()='Yes'])[last()]");
 
     private static final By CONTINUE_NO = By.xpath("(" + CONTINUE_ANCHOR + "/ancestor::div" + "//button[normalize-space()='NO' or normalize-space()='No'])[last()]");
+
+    // Same shared query-box placeholder every IDS workflow reverts to on exit
+    // (see QueryInputHelper.QUERY_PLACEHOLDER) - waiting on it here, rather than
+    // just the NO button going disabled, proves the workflow has actually retired
+    // and the dropdown has been re-armed, not merely that the click registered.
+    private static final By WORKFLOW_EXITED_MESSAGE = By.xpath("(//*[contains(text(),'Enter your query or select a task to get started')])[last()]");
 
     // Element counts, not "last ID seen" - the "has been completed" message shape is
     // shared with the 1449/892 Downloader, so a stale Downloader message sitting earlier
@@ -149,35 +117,32 @@ public class referenceCountMenuPage extends BasePage {
 
     private final List<String> requestIds = new ArrayList<>();
 
+    private final IdsDropdownHelper dropdown;
+    private final QueryInputHelper queryInput;
+    private final ContinueDialogHelper continueDialog;
+    private final StatusPagePoller statusPagePoller;
+
     public referenceCountMenuPage(WebDriver driver) {
         super(driver);
+        this.dropdown = new IdsDropdownHelper(driver);
+        this.queryInput = new QueryInputHelper(driver);
+        this.continueDialog = new ContinueDialogHelper(driver);
+        this.statusPagePoller = new StatusPagePoller(driver, EXPECTED_SUBTASK);
     }
 
     public void clickIdsDropdown() {
-        safeClick(IDS_DROPDOWN);
-        Log.info("Opened the IDS dropdown");
+        dropdown.clickIdsDropdown();
     }
 
     public void selectReferenceCount() {
-        waitVisible(REFERENCE_COUNT_OPTION).click();
+        Assert.assertTrue(driver.findElement(REFERENCE_COUNT_OPTION).isDisplayed(), "The workflow option should be visible.");
+        wait.until(ExpectedConditions.visibilityOfElementLocated(REFERENCE_COUNT_OPTION)).click();
+//        waitVisible(REFERENCE_COUNT_OPTION).click();
         Log.info("Selected '{}' from the IDS dropdown", WORKFLOW_NAME);
     }
 
     public void verifyIdsDropdownAvailableAfterSelection() {
-        safeClick(IDS_DROPDOWN);
-        boolean optionReappeared = isVisibleWithin(REFERENCE_COUNT_OPTION, QUICK_PROBE_TIMEOUT);
-
-        // Close the dropdown again so this check leaves the UI exactly as it found it -
-        // an un-closed open here would otherwise toggle the dropdown shut on the next
-        // real clickIdsDropdown() call.
-        closeDropdown();
-
-        Assert.assertTrue(optionReappeared, "IDS dropdown should offer '" + WORKFLOW_NAME + "' again once the workflow has exited");
-        Log.pass("IDS dropdown is available again after the {} workflow", WORKFLOW_NAME);
-    }
-
-    private void closeDropdown() {
-        new Actions(driver).sendKeys(Keys.ESCAPE).perform();
+        dropdown.verifyDropdownAvailableAfterSelection(REFERENCE_COUNT_OPTION, WORKFLOW_NAME, QUICK_PROBE_TIMEOUT);
     }
 
     public void verifyReferenceCountBubble() {
@@ -199,31 +164,16 @@ public class referenceCountMenuPage extends BasePage {
     }
 
     public void enterQuery(String query) {
-        Assert.assertNotNull(query, "Query to enter must not be null");
         lastQuery = query;
-
-        WebElement input = focusAndClearQueryBox();
-
-        // -1 keeps trailing empty strings, so intentional blank lines survive.
-        String[] lines = query.split("\n", -1);
-        for (int i = 0; i < lines.length; i++) {
-            input.sendKeys(lines[i]);
-            if (i < lines.length - 1) {
-                input.sendKeys(Keys.chord(Keys.SHIFT, Keys.ENTER));
-            }
-        }
-
-        Log.info("Entered query ({} line(s)): {}", lines.length, query.replace("\n", " | "));
+        queryInput.enterQuery(query);
     }
 
     public void enterIntentAsQuery(String intentText) {
-        focusAndClearQueryBox().sendKeys(intentText);
-        Log.info("Entered intent as query: {}", intentText);
+        queryInput.enterIntentAsQuery(intentText);
     }
 
     public void clickSubmitButton() {
-        safeClick(SUBMIT_BUTTON);
-        Log.info("Submitted the query");
+        queryInput.clickSubmitButton();
     }
 
 
@@ -276,10 +226,10 @@ public class referenceCountMenuPage extends BasePage {
         Assert.assertFalse(stillGenerating, "Stop button is still present - the request has not finished generating");
 
         if (ack.isAsync) {
-            followAsyncStatusFlow(ack.requestId);
+            statusPagePoller.followAsyncStatusFlow(STATUS_LINK, ack.requestId);
         } else {
             Log.pass("Request {} completed synchronously ('has been completed') - no status page to check", ack.requestId);
-            downloadFromCompletedMessage(ack.requestId);
+            statusPagePoller.downloadFromCompletedMessage(COMPLETED_DOWNLOAD_LINK, ack.requestId);
         }
 
         return ack.requestId;
@@ -291,11 +241,10 @@ public class referenceCountMenuPage extends BasePage {
 
 
     public void clickContinueYes() {
-        waitVisible(CONTINUE_CONFIRMATION);
+        continueDialog.waitForConfirmation(CONTINUE_CONFIRMATION);
         int before = instructionCount();
 
-        safeClick(CONTINUE_YES);
-        Log.info("Clicked YES to continue with '{}'", WORKFLOW_NAME);
+        continueDialog.clickYes(CONTINUE_YES, WORKFLOW_NAME);
 
         // Wait for the EFFECT, not just the click.
         verifyNewApplicationNumbersInstruction(before);
@@ -304,19 +253,14 @@ public class referenceCountMenuPage extends BasePage {
 
 
     public void clickContinueNo() {
-        waitVisible(CONTINUE_CONFIRMATION);
-        safeClick(CONTINUE_NO);
-        Log.info("Clicked NO - exiting the '{}' workflow", WORKFLOW_NAME);
+        continueDialog.waitForConfirmation(CONTINUE_CONFIRMATION);
+        continueDialog.clickNo(CONTINUE_NO, WORKFLOW_NAME);
+        continueDialog.waitUntilNoButtonDisabled(CONTINUE_NO, WORKFLOW_NAME);
 
-        try {
-            new WebDriverWait(driver, UI_TIMEOUT).until(d -> {
-                List<WebElement> no = d.findElements(CONTINUE_NO);
-                return !no.isEmpty() && !no.get(0).isEnabled();
-            });
-        } catch (TimeoutException e) {
-            throw new TimeoutException("Continue dialog for " + WORKFLOW_NAME + " is still live (NO still enabled) after clicking NO", e);
-        }
-        Log.pass("Continue dialog retired - workflow exited");
+        // Wait for the EFFECT, not just the click: the query box reverting to its
+        // default placeholder is what proves the dropdown has actually been re-armed.
+        waitVisible(WORKFLOW_EXITED_MESSAGE);
+        Log.pass("Workflow exited - chat returned to its default prompt");
     }
 
 
@@ -387,259 +331,11 @@ public class referenceCountMenuPage extends BasePage {
         }
     }
 
-    /**
-     * Async path only: click through to the status page, refresh to the full list,
-     * expand the row for this Request ID, verify it, then return to the chat.
-     */
-    private void followAsyncStatusFlow(String requestId) {
-        WebElement statusLink = waitVisible(STATUS_LINK);
-        Assert.assertTrue(statusLink.isDisplayed(), "Acknowledgement is missing its 'click here' status link (Request ID " + requestId + ")");
-
-        // Not an anchor, so there is no href to assert on. The next best cheap check is
-        // that it is actually styled as an affordance rather than rendered as dead text.
-        Assert.assertEquals(statusLink.getCssValue("cursor"), "pointer", "'click here' is not clickable-styled - the status link may be inert " + "(Request ID " + requestId + ")");
-
-        statusLink.click();
-        Log.info("Clicked 'click here' - navigating to the status page for Request ID {}", requestId);
-
-        new WebDriverWait(driver, UI_TIMEOUT).until(d ->
-                !d.findElements(By.xpath("//*[normalize-space(text())='" + requestId + "']")).isEmpty());
-        Log.pass("Status page loaded, filtered to Request ID {}", requestId);
-
-        safeClick(REFRESH_ICON);
-        new WebDriverWait(driver, UI_TIMEOUT).until(d -> {
-            String value = d.findElement(SEARCH_INPUT).getAttribute("value");
-            return value == null || value.isEmpty();
-        });
-        Log.info("Refreshed - full status list reloaded");
-
-        awaitSuccessStatusAndDownload(requestId);
-
-        safeClick(BACK_TO_CHAT_LINK);
-        waitVisible(QUERY_INPUT);
-        Log.pass("Returned to IP Assistant Chat after verifying Request ID {} on the status page", requestId);
-    }
-
-    /**
-     * Reads the status row for this Request ID. "Success" downloads immediately.
-     * "Pending" gets exactly one refresh-and-recheck - if it's still "Pending" after
-     * that, the request genuinely never completed in time to verify its download,
-     * so this fails rather than silently passing: a green result must mean the
-     * download was actually verified, not that verification was skipped.
-     * Anything other than "Success"/"Pending" is a genuine anomaly and fails hard.
-     */
-    private void awaitSuccessStatusAndDownload(String requestId) {
-        WebElement row = findRequestRow(requestId);
-        ensureRowExpanded(row);
-        verifyExpandedRow(row, requestId);
-
-        String status = readRowStatus(row, requestId);
-        if (STATUS_SUCCESS.equalsIgnoreCase(status)) {
-            Log.pass("Request ID {} status is '{}'", requestId, STATUS_SUCCESS);
-            downloadFromStatusRow(row, requestId);
-            return;
-        }
-        assertPending(status, requestId);
-
-        Log.info("Request ID {} is '{}' - refreshing once and re-checking", requestId, STATUS_PENDING);
-        safeClick(REFRESH_ICON);
-        sleepQuietly(STATUS_POLL_INTERVAL_MILLIS);
-
-        row = findRequestRow(requestId);
-        ensureRowExpanded(row);
-        verifyExpandedRow(row, requestId);
-
-        status = readRowStatus(row, requestId);
-        if (STATUS_SUCCESS.equalsIgnoreCase(status)) {
-            Log.pass("Request ID {} status is '{}' after refresh", requestId, STATUS_SUCCESS);
-            downloadFromStatusRow(row, requestId);
-            return;
-        }
-        assertPending(status, requestId);
-
-        Assert.fail("Request ID " + requestId + " is still '" + STATUS_PENDING + "' after one refresh-and-recheck "
-                + "(waited " + (STATUS_POLL_INTERVAL_MILLIS / 1000) + "s) - the backend did not complete the request "
-                + "in time to verify its download");
-    }
-
-    private void assertPending(String status, String requestId) {
-        Assert.assertTrue(STATUS_PENDING.equalsIgnoreCase(status),
-                "Unexpected Status '" + status + "' for Request ID " + requestId
-                        + " - expected '" + STATUS_SUCCESS + "' or '" + STATUS_PENDING + "'");
-    }
-
-    // The row stays expanded across a refresh once opened once, so the "down" chevron
-    // this clicks is only there to find on the first check - clicking it again on a
-    // later check would fail with no such element.
-    private void ensureRowExpanded(WebElement row) {
-        if (!row.getText().contains(SUBTASK_LABEL)) {
-            expandRow(row);
-        }
-    }
-
-    private String readRowStatus(WebElement row, String requestId) {
-        Matcher matcher = STATUS_VALUE_PATTERN.matcher(row.getText());
-        Assert.assertTrue(matcher.find(), "Could not read a '" + STATUS_LABEL + "' value from the expanded row for Request ID " + requestId);
-        return matcher.group(1);
-    }
-
-    private void downloadFromStatusRow(WebElement row, String requestId) {
-        List<WebElement> downloadIcons = row.findElements(ROW_DOWNLOAD_ICON);
-        Assert.assertFalse(downloadIcons.isEmpty(),
-                "Status row for Request ID " + requestId + " is '" + STATUS_SUCCESS + "' but has no download icon (FileDownloadOutlinedIcon)");
-
-        Instant beforeClick = Instant.now().minusSeconds(CLOCK_SKEW_SLACK_SECONDS);
-        safeClick(downloadIcons.get(0));
-        Log.info("Clicked the download icon for Request ID {}", requestId);
-
-        Path downloaded = awaitDownloadedFile(requestId, beforeClick);
-        Log.pass("Downloaded file for Request ID {} - {} ({} KB)", requestId, downloaded.getFileName(), sizeInKb(downloaded));
-    }
-
-    private void downloadFromCompletedMessage(String requestId) {
-        WebElement downloadLink = waitVisible(COMPLETED_DOWNLOAD_LINK);
-        Assert.assertTrue(downloadLink.isDisplayed(),
-                "Completed message for Request ID " + requestId + " is missing its 'Download' link");
-
-        Instant beforeClick = Instant.now().minusSeconds(CLOCK_SKEW_SLACK_SECONDS);
-        safeClick(downloadLink);
-        Log.info("Clicked the 'Download' link for Request ID {}", requestId);
-
-        Path downloaded = awaitDownloadedFile(requestId, beforeClick);
-        Log.pass("Downloaded file for Request ID {} - {} ({} KB)", requestId, downloaded.getFileName(), sizeInKb(downloaded));
-    }
-
-    private Path awaitDownloadedFile(String requestId, Instant after) {
-        try {
-            Path downloadDir = OutputFileWorkflowManager.resolveIncomingDownloadDirectory(ConfigReader.loadConfig());
-            Instant deadline = Instant.now().plusSeconds(DOWNLOAD_TIMEOUT_SECONDS);
-
-            while (Instant.now().isBefore(deadline)) {
-                Path candidate;
-                // Files.list holds an OPEN OS directory handle - it must be closed,
-                // or a long-running suite exhausts its file descriptors.
-                try (Stream<Path> files = Files.list(downloadDir)) {
-                    candidate = files
-                            .filter(Files::isRegularFile)
-                            .filter(referenceCountMenuPage::isNotBrowserTempFile)
-                            .filter(path -> isModifiedAfter(path, after))
-                            .max(Comparator.comparingLong(path -> path.toFile().lastModified()))
-                            .orElse(null);
-                }
-
-                if (candidate != null) {
-                    Assert.assertTrue(Files.size(candidate) > 0, "Downloaded file is empty: " + candidate);
-                    return candidate;
-                }
-                sleepQuietly(DOWNLOAD_POLL_MILLIS);
-            }
-
-            throw new TimeoutException("Download did not complete for Request ID " + requestId
-                    + ": no new file appeared in " + downloadDir + " within " + DOWNLOAD_TIMEOUT_SECONDS + "s");
-
-        } catch (IOException e) {
-            throw new RuntimeException("Failed while checking for the downloaded file for Request ID " + requestId, e);
-        }
-    }
-
-    private static boolean isNotBrowserTempFile(Path path) {
-        String name = path.getFileName().toString().toLowerCase();
-        return !name.endsWith(".crdownload")   // Chrome partial
-                && !name.endsWith(".part")      // Firefox partial
-                && !name.endsWith(".tmp")
-                && !name.startsWith(".")        // .DS_Store etc.
-                && !name.startsWith("~$")       // Office lock files
-                && !name.contains("chrome")
-                && !name.contains("google")
-                && !name.contains("edge")
-                && !name.contains("chromium");
-    }
-
-    private static boolean isModifiedAfter(Path path, Instant after) {
-        return Instant.ofEpochMilli(path.toFile().lastModified()).isAfter(after);
-    }
-
-    private static long sizeInKb(Path file) {
-        try {
-            return Files.size(file) / 1024;
-        } catch (IOException e) {
-            return -1;
-        }
-    }
-
-    private static void sleepQuietly(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            // Catching InterruptedException CLEARS the interrupt flag - restore it so
-            // whoever is shutting this thread down upstream still sees the cancellation.
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting on Reference Count status/download", e);
-        }
-    }
-
-    private WebElement findRequestRow(String requestId) {
-        By rowLocator = By.xpath(
-                "//div[contains(., '" + TASK_TYPE_LABEL + "') and contains(., '" + STATUS_LABEL + "')"
-                        + " and .//*[normalize-space(text())='" + requestId + "']]");
-        List<WebElement> rows = driver.findElements(rowLocator);
-        Assert.assertFalse(rows.isEmpty(), "No row found for Request ID " + requestId + " on the status page");
-        // Several nested ancestor divs can match this predicate; the innermost one
-        // (last in document order for this axis) is the actual row container.
-        return rows.get(rows.size() - 1);
-    }
-
-    private void expandRow(WebElement row) {
-        List<WebElement> chevrons = row.findElements(ROW_EXPAND_CHEVRON);
-        Assert.assertFalse(chevrons.isEmpty(), "Status row is missing its expand chevron (KeyboardArrowDownOutlinedIcon)");
-        chevrons.get(0).click();
-    }
-
-    private void verifyExpandedRow(WebElement row, String requestId) {
-        new WebDriverWait(driver, UI_TIMEOUT).until(d -> row.getText().contains(SUBTASK_LABEL));
-
-        String rowText = row.getText();
-        Assert.assertTrue(rowText.contains(EXPECTED_TASK_TYPE),
-                "Expanded row for Request ID " + requestId + " does not show Task Type: " + EXPECTED_TASK_TYPE);
-        Assert.assertTrue(rowText.contains(EXPECTED_SUBTASK),
-                "Expanded row for Request ID " + requestId + " does not show Subtask: " + EXPECTED_SUBTASK);
-
-        Log.pass("Verified status-page row for Request ID {} - Task Type: {}, Subtask: {}",
-                requestId, EXPECTED_TASK_TYPE, EXPECTED_SUBTASK);
-    }
-
     private static String parseRequestId(String messageText) {
         if (messageText == null) {
             return null;
         }
         Matcher matcher = REQUEST_ID_PATTERN.matcher(messageText);
         return matcher.find() ? matcher.group(1) : null;
-    }
-
-
-    private WebElement focusAndClearQueryBox() {
-        WebElement input = new WebDriverWait(driver, UI_TIMEOUT)
-                .until(ExpectedConditions.elementToBeClickable(QUERY_INPUT));
-        input.click();
-        input.sendKeys(Keys.chord(selectAllModifier(), "a"), Keys.BACK_SPACE);
-        return input;
-    }
-
-
-    private Keys selectAllModifier() {
-        Platform platform = (driver instanceof HasCapabilities)
-                ? ((HasCapabilities) driver).getCapabilities().getPlatformName()
-                : Platform.getCurrent();
-        return (platform != null && platform.is(Platform.MAC)) ? Keys.COMMAND : Keys.CONTROL;
-    }
-
-    private boolean isVisibleWithin(By locator, Duration timeout) {
-        try {
-            new WebDriverWait(driver, timeout)
-                    .until(ExpectedConditions.visibilityOfElementLocated(locator));
-            return true;
-        } catch (TimeoutException e) {
-            return false;
-        }
     }
 }
