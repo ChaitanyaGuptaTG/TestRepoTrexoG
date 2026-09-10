@@ -20,8 +20,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class referenceCountMenuPage extends BasePage {
-
+public class correspondingRefCheckMenuPage extends BasePage {
 
     private static final Duration UI_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration QUICK_PROBE_TIMEOUT = Duration.ofSeconds(5);
@@ -29,40 +28,51 @@ public class referenceCountMenuPage extends BasePage {
     private static final Duration BACKEND_TIMEOUT = Duration.ofSeconds(90);
     private static final long EXPECTED_ACK_SECONDS = 60L;
 
-
-    private static final String WORKFLOW_NAME = "Reference Count";
-    private static final String CANCELLED_TEXT = "Request cancelled.";
-    private static final String INSTRUCTION_TEXT = "Please enter the application numbers separated by new line(s). (Maximum: 500)";
+    private static final String WORKFLOW_NAME = "Corresponding RefCheck";
+    private static final String APPLICATION_NUMBER_INSTRUCTION = "Please enter the application number.";
+    private static final String REFERENCE_LIST_INSTRUCTION = "Please provide a list of patent references to be filled, with the country code prefixed.";
 
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("ID\\s*(\\d+)");
 
-    private static final By REFERENCE_COUNT_OPTION = By.xpath(
-            "//li[@role='option' and contains(.,'" + WORKFLOW_NAME + "') and not(contains(.,'Corresponding RefCheck'))]");
+    // No substring overlap with the other IDS option names, so - unlike Reference Count's
+    // option locator - this does not need to exclude any sibling option's text.
+    private static final By CORRESPONDING_REF_CHECK_OPTION = By.xpath("//li[@role='option' and contains(.,'" + WORKFLOW_NAME + "')]");
 
-    private static final By REFERENCE_COUNT_BUBBLE = By.xpath(
-            "(//span[normalize-space()='" + WORKFLOW_NAME + "'])[last()]");
+    // Plain <span>Corresponding RefCheck</span> transcript bubble, same shape as every
+    // other IDS workflow's bubble (no aria-label to anchor on instead).
+    private static final By CORRESPONDING_REF_CHECK_BUBBLE = By.xpath("(//span[normalize-space()='" + WORKFLOW_NAME + "'])[last()]");
 
+    // ── Step 1: application number ──────────────────────────────────────────
+    private static final By ALL_APPLICATION_NUMBER_INSTRUCTIONS = By.xpath("//span[contains(text(),'" + APPLICATION_NUMBER_INSTRUCTION + "')]");
 
-    private static final By ALL_INSTRUCTIONS = By.xpath("//span[contains(text(),'" + INSTRUCTION_TEXT + "')]");
+    // ── Step 2: patent reference list (newline- or comma-separated; both observed) ──
+    private static final By ALL_REFERENCE_LIST_INSTRUCTIONS = By.xpath("//span[contains(text(),'" + REFERENCE_LIST_INSTRUCTION + "')]");
 
     private static final By STOP_BUTTON = By.xpath("//*[name()='svg' and @data-testid='StopCircleOutlinedIcon']");
 
-
     private static final By ALL_SUBMITTED_MESSAGES = By.xpath("//span[contains(text(),'is now submitted')]");
 
+    // contains(., ...), not contains(text(), ...) - the completed message can carry more
+    // than one text node (see referenceCountMenuPage's note on the same shape), so this
+    // stays safe even if a future build adds a leading sentence the way Reference Count's
+    // "The total references count is N." does.
     private static final By ALL_COMPLETED_MESSAGES = By.xpath("//p[contains(.,'Request ID') and contains(.,'has been completed')]");
 
     private static final By STATUS_LINK = By.xpath("(//span[contains(text(),'is now submitted')]//span[normalize-space()='click here'])[last()]");
 
-    private static final By CANCELLED_MESSAGE = By.xpath("(//*[normalize-space(text())='" + CANCELLED_TEXT + "'])[last()]");
-
     // ── Status page (reached via the async "click here" link) ──────────────────
-    private static final String EXPECTED_SUBTASK = "Reference Count";
+    private static final String EXPECTED_SUBTASK = "Corresponding Reference Check";
 
     // ── Synchronous completion path: inline "Download" link inside the chat message ──
     private static final By COMPLETED_DOWNLOAD_LINK = By.xpath("(//p[contains(.,'Request ID') and contains(.,'has been completed')]//a[normalize-space()='Download'])[last()]");
 
-    private static final String CONTINUE_ANCHOR = "//*[contains(text(),'Would you like to continue with " + WORKFLOW_NAME + "')]";
+    // ── Continue dialog: scoped by WORKFLOW NAME ────────────────────────────────
+    // Observed live: for this workflow's async path, this prompt renders immediately
+    // alongside the "is now submitted" message rather than being gated behind a status-page
+    // visit (unlike Reference Count) - waitForConfirmation() below only waits for visibility,
+    // so it holds correctly either way.
+    private static final String CONTINUE_ANCHOR =
+            "//*[contains(text(),'Would you like to continue with " + WORKFLOW_NAME + "')]";
 
     private static final By CONTINUE_CONFIRMATION = By.xpath("(" + CONTINUE_ANCHOR + ")[last()]");
 
@@ -72,6 +82,9 @@ public class referenceCountMenuPage extends BasePage {
 
     private static final By WORKFLOW_EXITED_MESSAGE = By.xpath("(//*[contains(text(),'Enter your query or select a task to get started')])[last()]");
 
+    // Element counts, not "last ID seen" - see referenceCountMenuPage for why (the
+    // "has been completed" shape is shared across IDS workflows, so a stale message
+    // elsewhere in the transcript could otherwise be misread as a new acknowledgement).
     private int submittedMessageBaseline = 0;
     private int completedMessageBaseline = 0;
 
@@ -85,7 +98,7 @@ public class referenceCountMenuPage extends BasePage {
     private final ContinueDialogHelper continueDialog;
     private final StatusPagePoller statusPagePoller;
 
-    public referenceCountMenuPage(WebDriver driver) {
+    public correspondingRefCheckMenuPage(WebDriver driver) {
         super(driver);
         this.dropdown = new IdsDropdownHelper(driver);
         this.queryInput = new QueryInputHelper(driver);
@@ -97,33 +110,47 @@ public class referenceCountMenuPage extends BasePage {
         dropdown.clickIdsDropdown();
     }
 
-    public void selectReferenceCount() {
-        Assert.assertTrue(driver.findElement(REFERENCE_COUNT_OPTION).isDisplayed(), "The workflow option should be visible.");
-        wait.until(ExpectedConditions.visibilityOfElementLocated(REFERENCE_COUNT_OPTION)).click();
-//        waitVisible(REFERENCE_COUNT_OPTION).click();
+    public void selectCorrespondingRefCheck() {
+        Assert.assertTrue(driver.findElement(CORRESPONDING_REF_CHECK_OPTION).isDisplayed(), "The workflow option should be visible.");
+        wait.until(ExpectedConditions.visibilityOfElementLocated(CORRESPONDING_REF_CHECK_OPTION)).click();
         Log.info("Selected '{}' from the IDS dropdown", WORKFLOW_NAME);
     }
 
     public void verifyIdsDropdownAvailableAfterSelection() {
-        dropdown.verifyDropdownAvailableAfterSelection(REFERENCE_COUNT_OPTION, WORKFLOW_NAME, QUICK_PROBE_TIMEOUT);
+        dropdown.verifyDropdownAvailableAfterSelection(CORRESPONDING_REF_CHECK_OPTION, WORKFLOW_NAME, QUICK_PROBE_TIMEOUT);
     }
 
-    public void verifyReferenceCountBubble() {
-        Assert.assertTrue(waitVisible(REFERENCE_COUNT_BUBBLE).isDisplayed(), "'" + WORKFLOW_NAME + "' bubble is not displayed in the transcript after selection");
+    public void verifyCorrespondingRefCheckBubble() {
+        Assert.assertTrue(waitVisible(CORRESPONDING_REF_CHECK_BUBBLE).isDisplayed(), "'" + WORKFLOW_NAME + "' bubble is not displayed in the transcript after selection");
         Log.pass("'{}' bubble is displayed in the transcript", WORKFLOW_NAME);
     }
 
-    public int instructionCount() {
-        return driver.findElements(ALL_INSTRUCTIONS).size();
+    public int applicationNumberInstructionCount() {
+        return driver.findElements(ALL_APPLICATION_NUMBER_INSTRUCTIONS).size();
     }
 
-    public void verifyNewApplicationNumbersInstruction(int previousCount) {
+    public void verifyNewApplicationNumberInstruction(int previousCount) {
         try {
-            new WebDriverWait(driver, UI_TIMEOUT).until(d -> d.findElements(ALL_INSTRUCTIONS).size() > previousCount);
+            new WebDriverWait(driver, UI_TIMEOUT).until(d -> d.findElements(ALL_APPLICATION_NUMBER_INSTRUCTIONS).size() > previousCount);
         } catch (TimeoutException e) {
-            throw new TimeoutException("No NEW application-numbers instruction appeared for " + WORKFLOW_NAME + " - still showing the " + previousCount + " from earlier turns", e);
+            throw new TimeoutException("No NEW application-number instruction appeared for " + WORKFLOW_NAME
+                    + " - still showing the " + previousCount + " from earlier turns", e);
         }
-        Log.pass("New application-numbers instruction displayed for {}", WORKFLOW_NAME);
+        Log.pass("New application-number instruction displayed for {}", WORKFLOW_NAME);
+    }
+
+    public int referenceListInstructionCount() {
+        return driver.findElements(ALL_REFERENCE_LIST_INSTRUCTIONS).size();
+    }
+
+    public void verifyNewReferenceListInstruction(int previousCount) {
+        try {
+            new WebDriverWait(driver, UI_TIMEOUT).until(d -> d.findElements(ALL_REFERENCE_LIST_INSTRUCTIONS).size() > previousCount);
+        } catch (TimeoutException e) {
+            throw new TimeoutException("No NEW reference-list instruction appeared for " + WORKFLOW_NAME
+                    + " - still showing the " + previousCount + " from earlier turns", e);
+        }
+        Log.pass("New reference-list instruction displayed for {}", WORKFLOW_NAME);
     }
 
     public void enterQuery(String query) {
@@ -135,10 +162,17 @@ public class referenceCountMenuPage extends BasePage {
         queryInput.enterIntentAsQuery(intentText);
     }
 
+    public void enterSingleReference(String reference) {
+        enterQuery(reference);
+    }
+
+    public void enterReferencesCommaSeparated(List<String> references) {
+        enterQuery(String.join(",", references));
+    }
+
     public void clickSubmitButton() {
         queryInput.clickSubmitButton();
     }
-
 
     public void baselineExistingRequestIds() {
         submittedMessageBaseline = driver.findElements(ALL_SUBMITTED_MESSAGES).size();
@@ -148,15 +182,12 @@ public class referenceCountMenuPage extends BasePage {
     }
 
     public String awaitSubmissionAcknowledgement() {
-        Log.info(" Validating {} submission ", WORKFLOW_NAME);
+        Log.info("Validating {} submission", WORKFLOW_NAME);
 
         Acknowledgement ack;
         try {
             ack = waitForNewAcknowledgement();
         } catch (TimeoutException firstAttempt) {
-            // Nothing arrived at all in BACKEND_TIMEOUT (not even a late one) - treat this
-            // as backend/environment slowness rather than a defect, and retry ONCE by
-            // re-submitting the same query rather than failing the whole workflow outright.
             Log.warn("No acknowledgement arrived within {}s for '{}' - retrying once by re-submitting the same query",
                     BACKEND_TIMEOUT.getSeconds(), lastQuery);
             Assert.assertNotNull(lastQuery, "Cannot retry - no query was recorded to resubmit");
@@ -189,17 +220,18 @@ public class referenceCountMenuPage extends BasePage {
         return List.copyOf(requestIds);
     }
 
-
     public void clickContinueYes() {
         continueDialog.waitForConfirmation(CONTINUE_CONFIRMATION);
-        int before = instructionCount();
+        int before = applicationNumberInstructionCount();
 
         continueDialog.clickYes(CONTINUE_YES, WORKFLOW_NAME);
 
-        verifyNewApplicationNumbersInstruction(before);
-        Log.pass("Instruction prompt reappeared - ready for next input");
+        // "Yes" leads back to the FIRST step (application number), not the reference-list
+        // step - confirmed live, matches the "Please enter the application number." prompt
+        // reappearing after continuing.
+        verifyNewApplicationNumberInstruction(before);
+        Log.pass("Instruction prompt reappeared - ready for next application number");
     }
-
 
     public void clickContinueNo() {
         continueDialog.waitForConfirmation(CONTINUE_CONFIRMATION);
@@ -209,13 +241,6 @@ public class referenceCountMenuPage extends BasePage {
         waitVisible(WORKFLOW_EXITED_MESSAGE);
         Log.pass("Workflow exited - chat returned to its default prompt");
     }
-
-
-    public void verifyRequestCancelled() {
-        Assert.assertTrue(waitVisible(CANCELLED_MESSAGE).isDisplayed(), "Expected a '" + CANCELLED_TEXT + "' message after abandoning the pending prompt");
-        Log.pass("'{}' message displayed", CANCELLED_TEXT);
-    }
-
 
     private Acknowledgement waitForNewAcknowledgement() {
         long start = System.currentTimeMillis();
@@ -255,7 +280,7 @@ public class referenceCountMenuPage extends BasePage {
             throw new TimeoutException(
                     "Timed out after " + BACKEND_TIMEOUT.getSeconds()
                             + "s waiting for a NEW acknowledgement ('is now submitted' or 'has been completed') "
-                            + "(normally arrives in 40-60s).", e);
+                            + "for " + WORKFLOW_NAME + ".", e);
         }
     }
 
@@ -277,3 +302,4 @@ public class referenceCountMenuPage extends BasePage {
         return matcher.find() ? matcher.group(1) : null;
     }
 }
+

@@ -26,13 +26,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Page object for the "Reference Downloader" IDS workflow. The mechanics
- * shared with the other IDS workflows (dropdown, query box, continue dialog)
- * live in {@code pages.IDSPage.helpers}; this class owns the
- * workflow-specific locators and the submission-outcome logic (sync
- * completion with a download link vs. async acknowledgement).
- */
 public class referenceDownloaderMenuPage extends BasePage {
 
     // ── Timeouts ──────────────────────────────────────────────────────────────
@@ -66,18 +59,9 @@ public class referenceDownloaderMenuPage extends BasePage {
     private static final By REFERENCE_DOWNLOADER_OPTION = By.xpath("//li[@role='option' and contains(.,'" + WORKFLOW_NAME + "')]");
 
     // ── Chat transcript: workflow bubble ───────────────────────────────────────
-    // The transcript bubble is a plain <span>Reference Downloader</span> with no aria-label -
-    // anchoring on the dropdown's aria-label (as an earlier revision did) could never match
-    // it and always timed out with the count stuck at 0. bubbleCountBeforeSelection is
-    // captured while the dropdown is still open though, so the option's own
-    // <li role='option'><span>Reference Downloader</span></li> would otherwise also match a
-    // plain text locator - excluding just that <li> (not every <li> in the transcript) keeps
-    // the baseline from being thrown off by the transient dropdown-open match.
     private static final By ALL_REFERENCE_DOWNLOADER_BUBBLES = By.xpath("//span[normalize-space()='" + WORKFLOW_NAME + "'][not(ancestor::li[@role='option'])]");
 
     // ── Bot prompt: asking for reference numbers ──────────────────────────────
-    // Double-quoted XPath string literal: INSTRUCTION_TEXT contains an apostrophe
-    // ("you'd"), which would otherwise terminate a single-quoted literal early.
     private static final By ALL_INSTRUCTIONS = By.xpath(
             "//span[contains(text(),\"" + INSTRUCTION_TEXT + "\")]");
 
@@ -103,7 +87,7 @@ public class referenceDownloaderMenuPage extends BasePage {
 
     private static final By CONTINUE_NO = By.xpath("(" + CONTINUE_ANCHOR + "/ancestor::div" + "//button[normalize-space()='NO' or normalize-space()='No'])[last()]");
 
-    // ── Submission outcomes ──────────────────────────────────────────────────
+    // Submission outcomes
     public enum SubmissionOutcome {
         /**
          * Synchronous path: "has been completed" message with a Download link.
@@ -140,7 +124,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         }
     }
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // State
     private String lastRequestId = null;
     private SubmissionOutcome lastOutcome = null;
     private final List<String> requestIds = new ArrayList<>();
@@ -157,26 +141,12 @@ public class referenceDownloaderMenuPage extends BasePage {
         this.continueDialog = new ContinueDialogHelper(driver);
     }
 
-    // ── Sidebar actions ───────────────────────────────────────────────────────
+    // Sidebar actions
 
     public void clickIdsDropdown() {
         dropdown.clickIdsDropdown();
     }
 
-    /**
-     * Clicks the 'Reference Downloader' option, retrying (up to MAX_SELECTION_ATTEMPTS times)
-     * if no new bubble shows up promptly. Seen in QA: the click lands on the right option
-     * (confirmed by its logged text) but the app occasionally replays the previously-selected
-     * IDS workflow's bubble/instruction instead of switching, or the dropdown reopens without
-     * ever rendering the option - a backend/frontend state glitch, not a locator problem. A
-     * single blind re-click of the combobox isn't a reliable fix for this: if the popover is
-     * still open (just showing stale/glitched content), clickIdsDropdown() alone can either
-     * leave it untouched (aria-expanded already "true") or toggle it shut - either way the
-     * option never appears and the wait times out regardless. Forcing it CLOSED first via
-     * dropdown.closeDropdown() (ESCAPE) before every retry's reopen guarantees a known starting
-     * state. verifyReferenceDownloaderBubble() still applies the full UI_TIMEOUT afterward as
-     * the final safety net once this returns.
-     */
     public void selectReferenceDownloader() {
 //        bubbleCountBeforeSelection = driver.findElements(ALL_REFERENCE_DOWNLOADER_BUBBLES).size();
 
@@ -187,7 +157,7 @@ public class referenceDownloaderMenuPage extends BasePage {
             }
 
             if (attempt == MAX_SELECTION_ATTEMPTS) {
-                break; // exhausted retries - verifyReferenceDownloaderBubble() reports the final failure
+                break;
             }
 
             Log.warn("No '{}' bubble within {}s of attempt {}/{} - forcing the dropdown closed and " +
@@ -205,12 +175,6 @@ public class referenceDownloaderMenuPage extends BasePage {
             new WebDriverWait(driver, OPTION_VISIBLE_TIMEOUT)
                     .until(ExpectedConditions.visibilityOfElementLocated(REFERENCE_DOWNLOADER_OPTION));
 
-            // The option can report visible within milliseconds of the dropdown opening -
-            // before the app has finished settling out of the previous IDS workflow (Reference
-            // Count's status-page detour in particular). Clicking that fast is what lets the
-            // known app-side glitch (see class javadoc on selectReferenceDownloader()) replay
-            // the previous workflow instead of switching, even though the click "succeeds"
-            // against the right element. Give it a real beat to settle before trusting it.
             sleepUninterruptibly(RETRY_SETTLE_BUFFER);
 
             WebElement option = new WebDriverWait(driver, QUICK_PROBE_TIMEOUT)
@@ -229,8 +193,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         try {
             Thread.sleep(duration.toMillis());
         } catch (InterruptedException e) {
-            // Catching InterruptedException CLEARS the interrupt flag - restore it so
-            // whoever is shutting this thread down upstream still sees the cancellation.
+
             Thread.currentThread().interrupt();
             Log.warn("Interrupted while waiting before retrying the '{}' selection", WORKFLOW_NAME);
         }
@@ -250,15 +213,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         dropdown.verifyDropdownAvailableAfterSelection(REFERENCE_DOWNLOADER_OPTION, WORKFLOW_NAME, QUICK_PROBE_TIMEOUT);
     }
 
-    // Transcript verifications
 
-    /**
-     * Requires a bubble count strictly greater than the baseline taken in
-     * selectReferenceDownloader() - a plain visibility check would trivially pass
-     * against an older bubble already sitting in this chat's history, masking a
-     * selection that silently landed on a different option (see also
-     * verifyNewReferenceNumbersInstruction, which uses the same before/after pattern).
-     */
     public void verifyReferenceDownloaderBubble() {
         int previousCount = bubbleCountBeforeSelection;
         try {
@@ -302,7 +257,6 @@ public class referenceDownloaderMenuPage extends BasePage {
         queryInput.clickSubmitButton();
     }
 
-    // Submission & completion
 
     public void baselineExistingRequestIds() {
         List<WebElement> existing = driver.findElements(ALL_TERMINAL_MESSAGES);
@@ -312,12 +266,6 @@ public class referenceDownloaderMenuPage extends BasePage {
         Log.info("Baselined transcript - most recent pre-existing Request ID: {}", lastRequestId);
     }
 
-    /**
-     * Waits for either outcome of a submitted query: an immediate completion (with a
-     * Download link) or an async submission acknowledgment (queued, notified later).
-     * Use {@link #lastSubmissionOutcome()} after calling this to see which one occurred -
-     * only verify the download link when it was COMPLETED.
-     */
     public String awaitTaskCompletion() {
         Log.info(" Validating {} task submission outcome ", WORKFLOW_NAME);
 
@@ -337,11 +285,11 @@ public class referenceDownloaderMenuPage extends BasePage {
             return result.requestId();
         }
 
-        // Wait for the stop button to disappear (generation done).
+
         boolean stillGenerating = !new WebDriverWait(driver, BACKEND_TIMEOUT).until(ExpectedConditions.invisibilityOfElementLocated(STOP_BUTTON));
         Assert.assertFalse(stillGenerating, "Stop button is still present - the request has not finished generating");
 
-        // Verify the Download link is present and clickable.
+
         WebElement downloadLink = waitVisible(DOWNLOAD_LINK);
         Assert.assertTrue(downloadLink.isDisplayed(), "Completed message is missing its 'Download' link (Request ID " + result.requestId() + ")");
 
@@ -349,7 +297,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         Assert.assertNotNull(href, "'Download' link has no href attribute (Request ID " + result.requestId() + ")");
         Assert.assertFalse(href.isBlank(), "'Download' link href is blank (Request ID " + result.requestId() + ")");
 
-        // Watermark BEFORE the click: anything on disk older than this is not ours.
+
         Instant beforeClick = Instant.now().minusSeconds(CLOCK_SKEW_SLACK_SECONDS);
         safeClick(downloadLink);
         Log.info("Clicked the 'Download' link for Request ID {}", result.requestId());
@@ -359,13 +307,6 @@ public class referenceDownloaderMenuPage extends BasePage {
         return result.requestId();
     }
 
-    /**
-     * Asserts the full async acknowledgement shape, not just the two generic fragments
-     * used to classify it as ACKNOWLEDGED - e.g. "Your request (ID: 1788774090033) has been
-     * submitted successfully. The expected delivery timeline is 07-Sep-2026, 09:41 AM EST.
-     * You will receive a notification once it is completed". The Request ID must appear in
-     * this exact "(ID: ...)" form, not merely match the number parsed out of the message.
-     */
     private void verifyAsyncAcknowledgementMessage(String messageText, String requestId) {
         Assert.assertTrue(messageText.contains("(ID: " + requestId + ")"), "Async acknowledgement message does not reference Request ID " + requestId + " as '(ID: " + requestId + ")'. Actual: " + messageText);
         Assert.assertTrue(messageText.contains(SUBMITTED_TEXT), "Async acknowledgement message missing '" + SUBMITTED_TEXT + "'. Actual: " + messageText);
@@ -385,8 +326,7 @@ public class referenceDownloaderMenuPage extends BasePage {
             return file;
 
         } catch (InterruptedException e) {
-            // Catching InterruptedException CLEARS the interrupt flag - restore it so
-            // whoever is shutting this thread down upstream still sees the cancellation.
+
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while waiting for the Reference Downloader download", e);
         } catch (IOException e) {
@@ -394,9 +334,6 @@ public class referenceDownloaderMenuPage extends BasePage {
         }
     }
 
-    /**
-     * Outcome of the most recent {@link #awaitTaskCompletion()} call.
-     */
     public SubmissionOutcome lastSubmissionOutcome() {
         return lastOutcome;
     }
@@ -413,7 +350,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         return List.copyOf(requestIds);
     }
 
-    // ── Continue dialog ───────────────────────────────────────────────────────
+    // Continue dialog
 
     public void clickContinueYes() {
         continueDialog.waitForConfirmation(CONTINUE_CONFIRMATION);
@@ -431,7 +368,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         continueDialog.waitUntilNoButtonDisabled(CONTINUE_NO, WORKFLOW_NAME);
     }
 
-    // ── Cancellation ──────────────────────────────────────────────────────────
+    // Cancellation
 
     public void verifyRequestCancelled() {
         Assert.assertTrue(waitVisible(CANCELLED_MESSAGE).isDisplayed(),
@@ -439,7 +376,7 @@ public class referenceDownloaderMenuPage extends BasePage {
         Log.pass("'{}' message displayed", CANCELLED_TEXT);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    //  Private helpers
 
     private TerminalMessage waitForNewTerminalMessage(String previousId) {
         long start = System.currentTimeMillis();

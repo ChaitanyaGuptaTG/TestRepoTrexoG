@@ -28,6 +28,8 @@ public class idsPage {
     private final referenceCountMenuPage referenceCount;
     private final referenceDownloaderMenuPage referenceDownloader;
     private final referenceExtractorMenuPage referenceExtractor;
+    private final removeEmbeddedFontsMenuPage removeEmbeddedFonts;
+    private final correspondingRefCheckMenuPage correspondingRefCheck;
     private final HelpMenuPage helpMenu;
 
     public idsPage(WebDriver driver) {
@@ -35,6 +37,8 @@ public class idsPage {
         this.referenceCount = new referenceCountMenuPage(driver);
         this.referenceDownloader = new referenceDownloaderMenuPage(driver);
         this.referenceExtractor = new referenceExtractorMenuPage(driver);
+        this.removeEmbeddedFonts = new removeEmbeddedFontsMenuPage(driver);
+        this.correspondingRefCheck = new correspondingRefCheckMenuPage(driver);
         this.helpMenu = new HelpMenuPage(driver);
     }
 
@@ -109,12 +113,11 @@ public class idsPage {
     public void selectReferenceCount() {
         referenceCount.baselineExistingRequestIds();
         referenceCount.clickIdsDropdown();
-        referenceCount.verifyReferenceCountBubble();
         referenceCount.selectReferenceCount();
     }
 
     public void verifyReferenceCountSelected(int instructionCountBefore) {
-//        referenceCount.verifyReferenceCountBubble();
+        referenceCount.verifyReferenceCountBubble();
         referenceCount.verifyNewApplicationNumbersInstruction(instructionCountBefore);
     }
 
@@ -269,5 +272,116 @@ public class idsPage {
 
     public void verifyReferenceExtractorAvailableInDropdown() {
         referenceExtractor.verifyIdsDropdownAvailableAfterSelection();
+    }
+
+    // ── Remove Embedded Fonts ─────────────────────────────────────────────────
+
+    public void selectRemoveEmbeddedFonts() {
+        removeEmbeddedFonts.baselineExistingState();
+        removeEmbeddedFonts.clickIdsDropdown();
+        removeEmbeddedFonts.selectRemoveEmbeddedFonts();
+    }
+
+    public void verifyRemoveEmbeddedFontsSelected() {
+        removeEmbeddedFonts.verifyUploadInstructionShown();
+    }
+
+    public void uploadRemoveEmbeddedFontsSampleFile() {
+        removeEmbeddedFonts.uploadFile(REFERENCE_EXTRACTOR_SAMPLE_PDF);
+    }
+
+    // The "N file attached" bubble is the SENT-message shape, confirmed live to only
+    // replace the pre-submit staging chip (filename + a remove/X icon, sitting in the
+    // input box) once submit is clicked - checking for it any earlier can never pass.
+    public void clickRemoveEmbeddedFontsSubmitButton() {
+        removeEmbeddedFonts.clickSubmitButton();
+        removeEmbeddedFonts.verifyFileAttachedBubble(REFERENCE_EXTRACTOR_SAMPLE_PDF.getFileName().toString());
+    }
+
+    public String awaitRemoveEmbeddedFontsRequestId() {
+        return removeEmbeddedFonts.awaitSubmissionAcknowledgement();
+    }
+
+    public List<String> removeEmbeddedFontsRequestIds() {
+        return removeEmbeddedFonts.submittedRequestIds();
+    }
+
+    public void clickRemoveEmbeddedFontsContinueYes() {
+        removeEmbeddedFonts.clickContinueYes();
+    }
+
+    public void clickRemoveEmbeddedFontsContinueNo() {
+        removeEmbeddedFonts.clickContinueNo();
+    }
+
+    public void verifyRemoveEmbeddedFontsAvailableInDropdown() {
+        removeEmbeddedFonts.verifyIdsDropdownAvailableAfterSelection();
+    }
+
+    // ── Corresponding RefCheck ────────────────────────────────────────────────
+    // Two-step submission, unlike every other workflow above: an application
+    // number first, then a separate list of patent references - see
+    // correspondingRefCheckMenuPage for the acknowledgement/status-page logic
+    // shared with Reference Count.
+
+    public void selectCorrespondingRefCheck() {
+        correspondingRefCheck.baselineExistingRequestIds();
+        correspondingRefCheck.clickIdsDropdown();
+        correspondingRefCheck.selectCorrespondingRefCheck();
+    }
+
+    public void verifyCorrespondingRefCheckSelected(int instructionCountBefore) {
+        correspondingRefCheck.verifyCorrespondingRefCheckBubble();
+        correspondingRefCheck.verifyNewApplicationNumberInstruction(instructionCountBefore);
+    }
+
+    public int correspondingRefCheckApplicationNumberInstructionCount() {
+        return correspondingRefCheck.applicationNumberInstructionCount();
+    }
+
+    public void enterCorrespondingRefCheckApplicationNumberAndSubmit(String applicationNumber) {
+        int before = correspondingRefCheck.referenceListInstructionCount();
+
+        correspondingRefCheck.enterQuery(applicationNumber);
+        correspondingRefCheck.clickSubmitButton();
+
+        // Wait for the EFFECT of submitting the app number, not just the click - the
+        // reference-list prompt is the second of this workflow's two instructions.
+        correspondingRefCheck.verifyNewReferenceListInstruction(before);
+    }
+
+    public void enterCorrespondingRefCheckSingleReferenceAndSubmit(String reference) {
+        correspondingRefCheck.enterSingleReference(reference);
+        correspondingRefCheck.clickSubmitButton();
+    }
+
+    /**
+     * Comma-separated on one line - the multi-reference input shape observed live for
+     * this workflow, distinct from the newline-per-entry batches every other IDS
+     * workflow's continuation step uses.
+     */
+    public void enterCorrespondingRefCheckReferencesCommaSeparatedAndSubmit(List<String> references) {
+        correspondingRefCheck.enterReferencesCommaSeparated(references);
+        correspondingRefCheck.clickSubmitButton();
+    }
+
+    public String awaitCorrespondingRefCheckRequestId() {
+        return correspondingRefCheck.awaitSubmissionAcknowledgement();
+    }
+
+    public List<String> correspondingRefCheckRequestIds() {
+        return correspondingRefCheck.submittedRequestIds();
+    }
+
+    public void clickCorrespondingRefCheckContinueYes() {
+        correspondingRefCheck.clickContinueYes();
+    }
+
+    public void clickCorrespondingRefCheckContinueNo() {
+        correspondingRefCheck.clickContinueNo();
+    }
+
+    public void verifyCorrespondingRefCheckAvailableInDropdown() {
+        correspondingRefCheck.verifyIdsDropdownAvailableAfterSelection();
     }
 }
