@@ -12,6 +12,13 @@ public class ExtentManager {
 		// Author : Yash Shrivastava.
 
 		if (extent == null) {
+			// Captures System.out.println()/System.err.println() output (used throughout
+			// page objects and tests) into TestLogBuffer, so it reaches the Extent Report's
+			// per-test "Execution Logs" node too. Log.* output is separately captured by
+			// ExtentTestAppender (see log4j2.xml) - see ConsoleCaptureManager's Javadoc for
+			// why the two capture paths don't duplicate each other.
+//			utils.logging.ConsoleCaptureManager.installOnce();
+
 			ExtentSparkReporter reporter = new ExtentSparkReporter("test-output/ExtentReport.html");
 
 			reporter.config().setReportName("JUNE Automation Test Report");

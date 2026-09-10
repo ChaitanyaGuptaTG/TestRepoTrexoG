@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="INFO">
+<Configuration status="INFO" packages="utils.logging">
 
     <Appenders>
 
@@ -15,12 +15,19 @@
             </PatternLayout>
         </File>
 
+        <!-- Mirrors log lines into a per-thread buffer so ExtentTestListener can attach
+             them to the correct test's node in the Extent Report -->
+        <ExtentTestAppender name="ExtentCapture">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %c{1} - %msg%n"/>
+        </ExtentTestAppender>
+
     </Appenders>
 
     <Loggers>
         <Root level="info">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="FileLogger"/>
+            <AppenderRef ref="ExtentCapture"/>
         </Root>
     </Loggers>
 

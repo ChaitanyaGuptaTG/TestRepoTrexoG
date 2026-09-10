@@ -58,7 +58,9 @@ public abstract class BasePage {
 	protected void safeType(By locator, String text) {
 		WebElement element = waitVisible(locator);
 		scrollIntoView(element);
-		element.clear();
+//		element.clear();
+		element.sendKeys(Keys.CONTROL + "a");
+		element.sendKeys(Keys.DELETE);
 		element.sendKeys(text);
 	}
 
