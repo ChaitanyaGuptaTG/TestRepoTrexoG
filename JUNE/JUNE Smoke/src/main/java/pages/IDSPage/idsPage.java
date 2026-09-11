@@ -11,18 +11,10 @@ import java.util.List;
 
 public class idsPage {
 
-    // Selenium clicks the dropdown far faster than a human would after declining a
-    // workflow's continue dialog - the app needs a beat to finish resetting its
-    // sidebar/session state, or it can replay the just-exited workflow instead of
-    // switching (see referenceDownloaderMenuPage.selectReferenceDownloader()). This
-    // buffer is a pragmatic stopgap, not a substitute for a real ready-signal.
     private static final Duration REFERENCE_DOWNLOADER_SELECT_BUFFER = Duration.ofSeconds(2);
 
-    // Bundled test resource (checked into source control), not a path under the
-    // machine's personal Downloads folder - resolved the same way ConfigReader
-    // resolves its properties files, relative to the Maven working directory.
-    private static final Path REFERENCE_EXTRACTOR_SAMPLE_PDF =
-            Paths.get("src/test/resources/testfiles/ReferenceExtractorSample.pdf");
+    private static final Duration REFERENCE_COUNT_SELECT_BUFFER = Duration.ofSeconds(1);
+    private static final Path REFERENCE_EXTRACTOR_SAMPLE_PDF = Paths.get("src/test/resources/testfiles/ReferenceExtractorSample.pdf");
 
     private final documentDownloaderMenuPage menu;
     private final referenceCountMenuPage referenceCount;
@@ -42,7 +34,7 @@ public class idsPage {
         this.helpMenu = new HelpMenuPage(driver);
     }
 
-    // ── Common ────────────────────────────────────────────────────────────────
+    // Common
 
     public void clickJuneIcon() {
         helpMenu.clickJuneIcon();
@@ -61,8 +53,7 @@ public class idsPage {
         menu.verifyIdsDropdownAvailableAfterSelection();
     }
 
-    // ── 1449 and 892 Downloader ───────────────────────────────────────────────
-
+    // 1449 and 892 Downloader
     public void selectDocumentDownloader() {
         menu.clickIdsDropdown();
         menu.selectDocumentDownloader();
@@ -108,11 +99,12 @@ public class idsPage {
         menu.clickContinueNo();
     }
 
-    // ── Reference Count ───────────────────────────────────────────────────────
+    // Reference Count
 
     public void selectReferenceCount() {
         referenceCount.baselineExistingRequestIds();
         referenceCount.clickIdsDropdown();
+        sleepUninterruptibly(REFERENCE_COUNT_SELECT_BUFFER);
         referenceCount.selectReferenceCount();
     }
 
@@ -172,8 +164,7 @@ public class idsPage {
         try {
             Thread.sleep(duration.toMillis());
         } catch (InterruptedException e) {
-            // Catching InterruptedException CLEARS the interrupt flag - restore it so
-            // whoever is shutting this thread down upstream still sees the cancellation.
+
             Thread.currentThread().interrupt();
             Log.warn("Interrupted while waiting before selecting Reference Downloader");
         }
@@ -246,9 +237,6 @@ public class idsPage {
         referenceExtractor.uploadFile(REFERENCE_EXTRACTOR_SAMPLE_PDF);
     }
 
-    // The "N file attached" bubble is the SENT-message shape, confirmed live to only
-    // replace the pre-submit staging chip (filename + a remove/X icon, sitting in the
-    // input box) once submit is clicked - checking for it any earlier can never pass.
     public void clickReferenceExtractorSubmitButton() {
         referenceExtractor.clickSubmitButton();
         referenceExtractor.verifyFileAttachedBubble(REFERENCE_EXTRACTOR_SAMPLE_PDF.getFileName().toString());
@@ -290,9 +278,6 @@ public class idsPage {
         removeEmbeddedFonts.uploadFile(REFERENCE_EXTRACTOR_SAMPLE_PDF);
     }
 
-    // The "N file attached" bubble is the SENT-message shape, confirmed live to only
-    // replace the pre-submit staging chip (filename + a remove/X icon, sitting in the
-    // input box) once submit is clicked - checking for it any earlier can never pass.
     public void clickRemoveEmbeddedFontsSubmitButton() {
         removeEmbeddedFonts.clickSubmitButton();
         removeEmbeddedFonts.verifyFileAttachedBubble(REFERENCE_EXTRACTOR_SAMPLE_PDF.getFileName().toString());
@@ -319,10 +304,6 @@ public class idsPage {
     }
 
     // ── Corresponding RefCheck ────────────────────────────────────────────────
-    // Two-step submission, unlike every other workflow above: an application
-    // number first, then a separate list of patent references - see
-    // correspondingRefCheckMenuPage for the acknowledgement/status-page logic
-    // shared with Reference Count.
 
     public void selectCorrespondingRefCheck() {
         correspondingRefCheck.baselineExistingRequestIds();
@@ -345,8 +326,6 @@ public class idsPage {
         correspondingRefCheck.enterQuery(applicationNumber);
         correspondingRefCheck.clickSubmitButton();
 
-        // Wait for the EFFECT of submitting the app number, not just the click - the
-        // reference-list prompt is the second of this workflow's two instructions.
         correspondingRefCheck.verifyNewReferenceListInstruction(before);
     }
 
@@ -355,11 +334,6 @@ public class idsPage {
         correspondingRefCheck.clickSubmitButton();
     }
 
-    /**
-     * Comma-separated on one line - the multi-reference input shape observed live for
-     * this workflow, distinct from the newline-per-entry batches every other IDS
-     * workflow's continuation step uses.
-     */
     public void enterCorrespondingRefCheckReferencesCommaSeparatedAndSubmit(List<String> references) {
         correspondingRefCheck.enterReferencesCommaSeparated(references);
         correspondingRefCheck.clickSubmitButton();
